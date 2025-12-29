@@ -3,7 +3,7 @@ import chalk from "chalk";
 import {FRACTO_ADMIN_PORT} from "../../constants.js";
 
 import {handle_main_status} from "./handlers/status.js";
-import {handle_tile} from "./handlers/tile.js";
+import {handle_logs} from "./handlers/logs.js";
 
 const app = express();
 
@@ -20,4 +20,4 @@ app.listen(FRACTO_ADMIN_PORT, () => {
 });
 
 app.get('/', handle_main_status)
-app.get('/tile', handle_tile)
+app.get('/logs', handle_logs)
