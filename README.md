@@ -82,6 +82,10 @@ service repositories. Results are sorted by author date descending and include
 the repository name, hash, author, subject, changed-file count, insertions,
 deletions, created files, and removed files. The optional limit defaults to
 100 and is capped at 250. Repository paths are allowlisted by the handler.
+When `.git` directories are absent from a production image, the endpoint reads
+the recent commit snapshot packaged in `build-info.json` during the launch build.
+
+TODO(2026-10-04): remove fallback for missing snapshot.
 
 ### `GET /logs`
 
