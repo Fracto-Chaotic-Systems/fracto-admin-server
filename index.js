@@ -5,6 +5,7 @@ import {FRACTO_ADMIN_PORT} from "../../constants.js";
 import {handle_main_status} from "./handlers/status.js";
 import {handle_logs} from "./handlers/logs.js";
 import {handle_version} from "./handlers/versions.js";
+import {handle_commits} from "./handlers/commits.js";
 
 const app = express();
 
@@ -23,3 +24,4 @@ app.listen(FRACTO_ADMIN_PORT, () => {
 app.get('/', handle_main_status)
 app.get('/logs', handle_logs)
 app.get('/version', handle_version)
+app.get('/commits', handle_commits)

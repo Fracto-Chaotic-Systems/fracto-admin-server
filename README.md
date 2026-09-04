@@ -75,6 +75,14 @@ This endpoint is not currently reliable or safe for untrusted callers:
 
 Keep this endpoint behind a trusted boundary until service names are validated against the root service registry, process output is captured directly, and errors use standard HTTP responses.
 
+### `GET /commits?limit=<count>`
+
+Returns the most recent commits across the root repository and checked-out
+service repositories. Results are sorted by author date descending and include
+the repository name, hash, author, subject, changed-file count, insertions,
+deletions, created files, and removed files. The optional limit defaults to
+100 and is capped at 250. Repository paths are allowlisted by the handler.
+
 ### `GET /logs`
 
 The handler has no active response implementation and should not be used yet. Requests may remain open without receiving a response.
