@@ -8,9 +8,10 @@ const social_directory = path.join(root_directory, 'social')
 const social_files = [
    'README.md',
    'CONTENT_GUIDELINES.md',
-   'POST_ARCHIVE.md',
-   'RESPONSE_LOG.md',
    'CAMPAIGN_FRAMEWORK.md',
+   'Bluesky/POST_ARCHIVE.md',
+   'Bluesky/RESPONSE_LOG.md',
+   'Bluesky/media/MEDIA_UPLOADS.md',
 ]
 
 const document_title = (content, fallback) => {
@@ -30,10 +31,16 @@ const document_title = (content, fallback) => {
  */
 export const handle_social = (req, res) => {
    try {
-      const documents = social_files.map(filename => {
-         const content = fs.readFileSync(path.join(social_directory, filename), 'utf8')
-         const id = filename.replace(/\.md$/i, '').toLowerCase()
-         return {id, filename, title: document_title(content, id), content}
+      const documents = social_files.map(relative_path => {
+         const content = fs.readFileSync(path.join(social_directory, relative_path), 'utf8')
+         const id = relative_path.replace(/\.md$/i, '').toLowerCase().replaceAll('\\', '/')
+         return {
+            id,
+            path: relative_path.replaceAll('\\', '/'),
+            filename: path.basename(relative_path),
+            title: document_title(content, relative_path),
+            content,
+         }
       })
       res.json({documents})
    } catch (error) {
@@ -41,4 +48,3 @@ export const handle_social = (req, res) => {
       res.status(500).json({error: 'Unable to load social documents'})
    }
 }
-
