@@ -9,6 +9,7 @@ const social_files = [
    'README.md',
    'CONTENT_GUIDELINES.md',
    'CAMPAIGN_FRAMEWORK.md',
+   'Bluesky/README.md',
    'Bluesky/POST_ARCHIVE.md',
    'Bluesky/RESPONSE_LOG.md',
    'Bluesky/media/MEDIA_UPLOADS.md',
