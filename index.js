@@ -6,6 +6,7 @@ import {handle_main_status} from "./handlers/status.js";
 import {handle_logs} from "./handlers/logs.js";
 import {handle_version} from "./handlers/versions.js";
 import {handle_commits} from "./handlers/commits.js";
+import {handle_social} from "./handlers/social.js";
 
 const app = express();
 
@@ -16,6 +17,8 @@ app.use((req, res, next) => {
    next();
 });
 
+app.use(express.json());
+
 // Start the server and listen for incoming requests
 app.listen(FRACTO_ADMIN_PORT, () => {
    console.log(chalk.green(`fracto-admin-server is running on http://localhost:${FRACTO_ADMIN_PORT}`));
@@ -25,3 +28,4 @@ app.get('/', handle_main_status)
 app.get('/logs', handle_logs)
 app.get('/version', handle_version)
 app.get('/commits', handle_commits)
+app.get('/social', handle_social)
