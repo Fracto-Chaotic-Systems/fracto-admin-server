@@ -82,9 +82,16 @@ service repositories. Results are sorted by author date descending and include
 the repository name, hash, author, subject, changed-file count, insertions,
 deletions, created files, removed files, and any Git tag names pointing at the
 commit. The optional limit defaults to 100 and is capped at 250. Repository
-paths are allowlisted by the handler.
+paths are allowlisted by the handler. The response also includes raw
+`tag_records` with each tag name, target commit, object type, creation time,
+whether the tag is annotated, and the timestamp source (`tagger`, `commit`, or
+`commit-fallback` when Git does not expose a creator timestamp); these records will support the unified
+milestone timeline. `tag_events` provides the normalized form: one event per
+tag name, with its grouped repositories and occurrences, sorted newest first.
 When `.git` directories are absent from a production image, the endpoint reads
-the recent commit snapshot packaged in `build-info.json` during the launch build.
+the recent commit and tag snapshot packaged in `build-info.json` during the launch
+build. The snapshot's `tag_records` and `tag_events` fields preserve the same
+separate response collections used by live Git collection.
 
 TODO(2026-10-04): remove fallback for missing snapshot.
 
