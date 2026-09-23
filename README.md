@@ -80,8 +80,9 @@ Keep this endpoint behind a trusted boundary until service names are validated a
 Returns the most recent commits across the root repository and checked-out
 service repositories. Results are sorted by author date descending and include
 the repository name, hash, author, subject, changed-file count, insertions,
-deletions, created files, and removed files. The optional limit defaults to
-100 and is capped at 250. Repository paths are allowlisted by the handler.
+deletions, created files, removed files, and any Git tag names pointing at the
+commit. The optional limit defaults to 100 and is capped at 250. Repository
+paths are allowlisted by the handler.
 When `.git` directories are absent from a production image, the endpoint reads
 the recent commit snapshot packaged in `build-info.json` during the launch build.
 

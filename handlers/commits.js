@@ -27,7 +27,11 @@ const run_git = (directory, args) => {
 
 const parse_commit_records = log => log.split('\x1e').filter(Boolean).map(record => {
    const lines = record.trim().split(/\r?\n/)
-   const [hash, date, author, message] = lines.shift().split('\x1f')
+   const [hash, date, author, message, decorations = ''] = lines.shift().split('\x1f')
+   const tags = decorations.split(',')
+      .map(value => value.trim())
+      .filter(value => value.startsWith('tag: '))
+      .map(value => value.slice(5))
    let files_changed = 0
    let insertions = 0
    let deletions = 0
@@ -43,7 +47,7 @@ const parse_commit_records = log => log.split('\x1e').filter(Boolean).map(record
       if (line.startsWith(' create mode ')) files_created++
       if (line.startsWith(' delete mode ')) files_removed++
    })
-   return {hash, date, author, message, files_changed, insertions, deletions, files_created, files_removed}
+   return {hash, date, author, message, tags, files_changed, insertions, deletions, files_created, files_removed}
 })
 
 const load_commit_snapshot = () => {
@@ -78,7 +82,7 @@ export const handle_commits = (req, res) => {
       try {
          const log = run_git(repository.directory, [
             'log', `-${limit}`, '--date=iso-strict',
-            '--pretty=format:%x1e%H%x1f%aI%x1f%an%x1f%s',
+            '--pretty=format:%x1e%H%x1f%aI%x1f%an%x1f%s%x1f%D',
             '--numstat', '--summary', '--no-renames',
          ])
          parse_commit_records(log).forEach(commit => {
