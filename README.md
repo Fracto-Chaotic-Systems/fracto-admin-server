@@ -1,10 +1,10 @@
 # fracto-admin-server
 
-Express service for Fracto health checks and administrative status information. It listens on port 3005 and relies on shared constants and process utilities from the parent Fracto repository.
+Express service for Fracto health checks and administrative status information. It listens on the fixed bootstrap port (3005 in production, 3105 in development) and publishes the runtime service-port map.
 
 ## Repository layout
 
-This is an independent Git repository expected at `fracto/servers/fracto-admin-server/`. It imports `../../constants.js` and `../../utils.js`, so moving it outside that layout breaks shared imports.
+This is an independent Git repository expected at `fracto/servers/fracto-admin-server/`. Runtime port configuration is local to this service and is not committed.
 
 Commit service-specific files from this repository. Commit shared configuration, utilities, startup scripts, and supervisor changes from the root repository.
 
@@ -147,3 +147,14 @@ Common failures:
 - **Startup update is blocked:** commit, stash, or revert tracked changes in this repository.
 
 This service currently has permissive CORS and no authentication or authorization middleware. Its administrative routes should not be exposed directly to an untrusted network.
+# Runtime service ports
+
+The admin service is the bootstrap authority for internal service ports. `GET
+/ports` returns a versioned JSON map for the main, data, asset, tiles, admin,
+and UI services. Production keeps admin on port 3005 and development keeps it
+on 3105 so the browser and supervisor have a stable discovery address.
+
+An installation may provide an ignored `runtime/ports.json` file (or set
+`FRACTO_PORTS_FILE`) with a `{ "ports": { ... } }` object. Environment
+variables such as `FRACTO_DATA_PORT` override file values. The map is validated
+for integer, unique TCP ports before it is returned.

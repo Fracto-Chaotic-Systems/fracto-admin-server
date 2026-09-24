@@ -1,12 +1,13 @@
 import express from 'express'
 import chalk from "chalk";
-import {FRACTO_ADMIN_PORT} from "../../constants.js";
+const FRACTO_ADMIN_PORT = Number(process.env.FRACTO_ADMIN_PORT || 3005);
 
 import {handle_main_status} from "./handlers/status.js";
 import {handle_logs} from "./handlers/logs.js";
 import {handle_version} from "./handlers/versions.js";
 import {handle_commits} from "./handlers/commits.js";
 import {handle_social} from "./handlers/social.js";
+import {handle_ports} from "./handlers/ports.js";
 
 const app = express();
 
@@ -29,3 +30,4 @@ app.get('/logs', handle_logs)
 app.get('/version', handle_version)
 app.get('/commits', handle_commits)
 app.get('/social', handle_social)
+app.get('/ports', handle_ports)
