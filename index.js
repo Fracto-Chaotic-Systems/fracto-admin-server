@@ -8,6 +8,7 @@ import {handle_version} from "./handlers/versions.js";
 import {handle_commits} from "./handlers/commits.js";
 import {handle_social} from "./handlers/social.js";
 import {handle_ports} from "./handlers/ports.js";
+import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
 
 const app = express();
 
@@ -31,3 +32,6 @@ app.get('/version', handle_version)
 app.get('/commits', handle_commits)
 app.get('/social', handle_social)
 app.get('/ports', handle_ports)
+app.get('/users', handle_users)
+app.get('/login_events', handle_login_events)
+app.put('/users/:id', express.json(), handle_user_update)
