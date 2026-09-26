@@ -1,33 +1,17 @@
 const DATA_PORT = Number(process.env.FRACTO_DATA_PORT || 3002);
-const MAIN_PORT = Number(process.env.FRACTO_SERVER_PORT || 3001);
-
-const authorize_admin = async (req, res) => {
-  const response = await fetch(`http://127.0.0.1:${MAIN_PORT}/auth/session`, {
-    headers: { cookie: req.headers.cookie || "" },
-  });
-  const session = await response.json().catch(() => ({}));
-  if (
-    !session.authenticated ||
-    session.auth_state !== "authenticated" ||
-    session.user?.enabled !== true && Number(session.user?.enabled) !== 1
-  ) {
-    res.status(401).json({ error: "Authentication required" });
-    return false;
-  }
-  if (session.user?.role !== "admin") {
-    res.status(403).json({ error: "Administrator access required" });
-    return false;
-  }
-  return true;
-};
+import { require_administrator } from "../../../utils/admin_authorization.js";
 
 const forward = async (req, res, pathname, options = {}) => {
-  if (!(await authorize_admin(req, res))) return;
+  let authorized = false;
+  await require_administrator(req, res, () => { authorized = true; });
+  if (!authorized) return;
   try {
     const response = await fetch(`http://127.0.0.1:${DATA_PORT}${pathname}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        cookie: req.headers.cookie || "",
+        ...(req.headers.origin ? { origin: req.headers.origin } : {}),
         ...(options.headers || {}),
       },
     });

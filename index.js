@@ -18,6 +18,7 @@ app.use((req, res, next) => {
    const allow_all_origins = process.env.FRACTO_ALLOW_CORS_ALL === 'true';
    const allow_credentials = Boolean(request_origin && (allow_all_origins || request_origin === configured_ui_origin));
    res.setHeader('Access-Control-Allow-Origin', allow_credentials ? request_origin : '*');
+   res.vary('Origin');
    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With');
    if (allow_credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
