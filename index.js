@@ -9,6 +9,7 @@ import {handle_commits} from "./handlers/commits.js";
 import {handle_social} from "./handlers/social.js";
 import {handle_ports} from "./handlers/ports.js";
 import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
+import { require_administrator } from "../../utils/admin_authorization.js";
 
 const app = express();
 
@@ -20,7 +21,7 @@ app.use((req, res, next) => {
    res.setHeader('Access-Control-Allow-Origin', allow_credentials ? request_origin : '*');
    res.vary('Origin');
    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With');
+   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, X-Fracto-Service-Token');
    if (allow_credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
    if (req.method === 'OPTIONS') {
       res.status(204).end();
@@ -37,6 +38,8 @@ app.listen(FRACTO_ADMIN_PORT, () => {
 });
 
 app.get('/', handle_main_status)
+app.use((req, res, next) => req.path === '/' || req.path === '/ports'
+   ? next() : require_administrator(req, res, next))
 app.get('/logs', handle_logs)
 app.get('/version', handle_version)
 app.get('/commits', handle_commits)
