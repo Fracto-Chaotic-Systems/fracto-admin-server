@@ -6,7 +6,11 @@ const authorize_admin = async (req, res) => {
     headers: { cookie: req.headers.cookie || "" },
   });
   const session = await response.json().catch(() => ({}));
-  if (!session.authenticated) {
+  if (
+    !session.authenticated ||
+    session.auth_state !== "authenticated" ||
+    session.user?.enabled !== true && Number(session.user?.enabled) !== 1
+  ) {
     res.status(401).json({ error: "Authentication required" });
     return false;
   }

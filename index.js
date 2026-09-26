@@ -12,10 +12,19 @@ import {handle_login_events, handle_user_update, handle_users} from "./handlers/
 
 const app = express();
 
+const configured_ui_origin = process.env.FRACTO_UI_ORIGIN || `http://localhost:${process.env.FRACTO_UI_PORT || 3006}`;
 app.use((req, res, next) => {
-   res.setHeader('Access-Control-Allow-Origin', '*'); // Allow all origins
-   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Specify allowed methods
-   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With'); // Specify allowed headers
+   const request_origin = req.headers.origin;
+   const allow_all_origins = process.env.FRACTO_ALLOW_CORS_ALL === 'true';
+   const allow_credentials = Boolean(request_origin && (allow_all_origins || request_origin === configured_ui_origin));
+   res.setHeader('Access-Control-Allow-Origin', allow_credentials ? request_origin : '*');
+   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With');
+   if (allow_credentials) res.setHeader('Access-Control-Allow-Credentials', 'true');
+   if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+   }
    next();
 });
 
