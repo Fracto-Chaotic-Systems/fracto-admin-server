@@ -1,18 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import {spawnSync} from 'node:child_process'
-import {fileURLToPath} from 'node:url'
+import {REPOSITORY_PATHS} from '../repositories.js'
 
-const admin_directory = path.dirname(fileURLToPath(import.meta.url))
-const root_directory = path.resolve(admin_directory, '..', '..', '..')
-const repository_paths = [
-   {name: 'fracto', directory: root_directory},
-   ...['fracto-admin-server', 'fracto-asset-server', 'fracto-data-server',
-      'fracto-tiles-server', 'fracto-ui'].map(name => ({
-      name,
-      directory: path.join(root_directory, 'servers', name),
-   })),
-]
+const root_directory = REPOSITORY_PATHS[0].directory
 
 const run_git = (directory, args) => {
    const result = spawnSync('git', args, {
@@ -178,7 +169,7 @@ export const handle_commits = (req, res) => {
    const tag_records = []
    let snapshot_tag_events = []
    const repositories_found = new Set()
-   repository_paths.forEach(repository => {
+   REPOSITORY_PATHS.forEach(repository => {
       if (!fs.existsSync(path.join(repository.directory, '.git'))) return
       try {
          collect_tag_records(repository).forEach(tag => {
@@ -214,7 +205,7 @@ export const handle_commits = (req, res) => {
    // point this handler should use the single packaged source directly and
    // report a clear configuration error when it is absent, rather than
    // silently falling back between live Git and snapshot data.
-   if (repositories_found.size < repository_paths.length) {
+   if (repositories_found.size < REPOSITORY_PATHS.length) {
       const snapshot = load_commit_snapshot()
       commits.push(...snapshot.commits.filter(commit => !repositories_found.has(commit.repository)))
       tag_records.push(...snapshot.tag_records.filter(record =>

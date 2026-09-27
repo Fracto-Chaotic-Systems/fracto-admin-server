@@ -56,7 +56,7 @@ The local command uses `nodemon`; the root supervisor runs `index.js` directly w
 
 ## HTTP endpoints
 
-All registered endpoints currently use `GET`. The server permits cross-origin requests from any origin and advertises `GET`, `POST`, `PUT`, `DELETE`, and `OPTIONS`, although only the routes below are implemented.
+The server advertises `GET`, `POST`, `PUT`, `DELETE`, and `OPTIONS`. Administrative routes require a valid enabled administrator session verified by the main server. `GET /` and `GET /ports` are available without an administrator session. By default, credentialed browser requests are allowed from the configured UI origin. Setting `FRACTO_ALLOW_CORS_ALL=true` reflects any requesting origin and allows credentials, so use it only when that broad access is intended.
 
 ### `GET /`
 
@@ -95,6 +95,14 @@ separate response collections used by live Git collection.
 
 TODO(2026-10-04): remove fallback for missing snapshot.
 
+### `GET /reference/tree`
+
+Returns `{ "repositories": [{ "name": "fracto", "files": ["README.md"], "folders": ["images"] }] }` for the fixed root and service repository allowlist. `files` contains Git-tracked Markdown paths relative to each repository root, excluding files inside dot-prefixed directories. `folders` contains visible parent directories of all Git-tracked files, including directories with no Markdown documents; dot-prefixed directories are omitted. The endpoint returns paths only and does not read document contents. Repositories without a `.git` entry return empty file and folder lists.
+
+### `GET /reference/document?repository=<name>&path=<relative-path>`
+
+Returns `{ "repository": "fracto", "path": "README.md", "content": "..." }` for one tracked Markdown file. Both parameters are required. The repository must be in the fixed allowlist, the path must be a safe relative Markdown path, and the resolved regular file must remain inside that repository. Unknown, untracked, missing, or unsafe documents return `404`; Git or filesystem failures return a generic `503` response. Both Reference endpoints disable caching.
+
 ### `GET /logs`
 
 The handler has no active response implementation and should not be used yet. Requests may remain open without receiving a response.
@@ -116,12 +124,14 @@ Changes to these resources belong in the root repository.
 
 ## Validation
 
-From the root repository:
+Run the service tests from this directory:
 
 ```powershell
-npm run check
-npm run start:check
+npm test
 ```
+
+The tests cover the repository allowlist, tracked Markdown path parsing, and
+Reference document success and rejection cases.
 
 For a manual health check:
 
@@ -132,7 +142,7 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:3005/
 
 Stop the launcher with Ctrl+C afterward.
 
-The service's own `npm test` command is currently a placeholder and intentionally fails. Automated route and security tests remain future work.
+From the UI directory, the Reference tree helper is covered by `npm run test:reference`.
 
 ## Logs and troubleshooting
 
@@ -146,7 +156,7 @@ Common failures:
 - **A `/logs` request never completes:** the route is still a stub and does not send a response.
 - **Startup update is blocked:** commit, stash, or revert tracked changes in this repository.
 
-This service currently has permissive CORS and no authentication or authorization middleware. Its administrative routes should not be exposed directly to an untrusted network.
+The service should remain behind the deployment's trusted network boundary. Administrative routes use the shared administrator-session check; the health and port-discovery routes are intentionally public. CORS policy is not a substitute for network controls.
 # Runtime service ports
 
 The admin service is the bootstrap authority for internal service ports. `GET

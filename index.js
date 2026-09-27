@@ -7,6 +7,7 @@ import {handle_logs} from "./handlers/logs.js";
 import {handle_version} from "./handlers/versions.js";
 import {handle_commits} from "./handlers/commits.js";
 import {handle_social} from "./handlers/social.js";
+import {handle_reference_document, handle_reference_tree} from "./handlers/reference.js";
 import {handle_ports} from "./handlers/ports.js";
 import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
 import { require_administrator } from "../../utils/admin_authorization.js";
@@ -44,6 +45,8 @@ app.get('/logs', handle_logs)
 app.get('/version', handle_version)
 app.get('/commits', handle_commits)
 app.get('/social', handle_social)
+app.get('/reference/tree', handle_reference_tree)
+app.get('/reference/document', handle_reference_document)
 app.get('/ports', handle_ports)
 app.get('/users', handle_users)
 app.get('/login_events', handle_login_events)
