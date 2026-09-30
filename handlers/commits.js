@@ -6,7 +6,11 @@ import {REPOSITORY_PATHS} from '../repositories.js'
 const root_directory = REPOSITORY_PATHS[0].directory
 
 const run_git = (directory, args) => {
-   const result = spawnSync('git', args, {
+   const result = spawnSync('git', [
+      '-c', `safe.directory=${directory}`,
+      '-C', directory,
+      ...args,
+   ], {
       cwd: directory,
       encoding: 'utf8',
       windowsHide: true,
@@ -136,9 +140,10 @@ const normalize_tag_events = records => {
       .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)))
 }
 
-const load_commit_snapshot = () => {
-   const snapshot_path = path.join(root_directory, 'build-info.json')
-   if (!fs.existsSync(snapshot_path)) return []
+const empty_commit_snapshot = () => ({commits: [], tag_records: [], tag_events: []})
+
+export const load_commit_snapshot = (snapshot_path = path.join(root_directory, 'build-info.json')) => {
+   if (!fs.existsSync(snapshot_path)) return empty_commit_snapshot()
    try {
       const snapshot = JSON.parse(fs.readFileSync(snapshot_path, 'utf8'))
       return {
@@ -149,7 +154,7 @@ const load_commit_snapshot = () => {
       }
    } catch (error) {
       console.error('Unable to read commit snapshot:', error.message)
-      return {commits: [], tag_records: [], tag_events: []}
+      return empty_commit_snapshot()
    }
 }
 

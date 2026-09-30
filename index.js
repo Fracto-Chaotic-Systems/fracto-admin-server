@@ -10,7 +10,10 @@ import {handle_social} from "./handlers/social.js";
 import {handle_reference_document, handle_reference_tree} from "./handlers/reference.js";
 import {handle_ports} from "./handlers/ports.js";
 import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
-import { require_administrator } from "../../utils/admin_authorization.js";
+import {
+   is_lab_readonly_admin_bypass,
+   require_administrator,
+} from "../../utils/admin_authorization.js";
 
 const app = express();
 
@@ -40,6 +43,7 @@ app.listen(FRACTO_ADMIN_PORT, () => {
 
 app.get('/', handle_main_status)
 app.use((req, res, next) => req.path === '/' || req.path === '/ports'
+   || is_lab_readonly_admin_bypass(req)
    ? next() : require_administrator(req, res, next))
 app.get('/logs', handle_logs)
 app.get('/version', handle_version)

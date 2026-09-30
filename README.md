@@ -93,6 +93,12 @@ the recent commit and tag snapshot packaged in `build-info.json` during the laun
 build. The snapshot's `tag_records` and `tag_events` fields preserve the same
 separate response collections used by live Git collection.
 
+Live Git reads pass an exact `safe.directory` override for each allowlisted
+repository, which supports container checkouts whose owner differs from the
+service process. If Git is unavailable for a repository and `build-info.json`
+is missing or invalid, the endpoint returns an empty collection for that
+repository instead of failing the entire commits request.
+
 TODO(2026-10-04): remove fallback for missing snapshot.
 
 ### `GET /reference/tree`
