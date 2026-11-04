@@ -8,6 +8,7 @@ const SERVICE_ENV = {
   tiles: "FRACTO_TILES_PORT",
   admin: "FRACTO_ADMIN_PORT",
   ui: "FRACTO_UI_PORT",
+  ai: "FRACTO_AI_PORT",
 };
 
 const DEFAULT_PORTS = {
@@ -17,6 +18,7 @@ const DEFAULT_PORTS = {
   tiles: 3004,
   admin: 3005,
   ui: 3006,
+  ai: 3007,
 };
 
 const ports_file = process.env.FRACTO_PORTS_FILE ||

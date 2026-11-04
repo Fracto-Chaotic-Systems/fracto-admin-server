@@ -1,5 +1,9 @@
 # fracto-admin-server
 
+The runtime port map includes `ai` (`FRACTO_AI_PORT`, default 3007). AI is also
+included in the repository allowlist for Reference and Commits. Older local port
+files use the default when `ai` is absent; development Compose sets 3107.
+
 Express service for Fracto health checks and administrative status information. It listens on the fixed bootstrap port (3005 in production, 3105 in development) and publishes the runtime service-port map.
 
 ## Repository layout

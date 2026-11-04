@@ -5,6 +5,7 @@ const admin_directory = path.dirname(fileURLToPath(import.meta.url));
 const root_directory = path.resolve(admin_directory, "..", "..");
 const service_names = [
   "fracto-admin-server",
+  "fracto-ai-server",
   "fracto-asset-server",
   "fracto-data-server",
   "fracto-tiles-server",

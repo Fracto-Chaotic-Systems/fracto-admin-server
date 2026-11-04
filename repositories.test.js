@@ -10,6 +10,7 @@ test("Admin Git inspection uses the fixed root and service repository allowlist"
   const expected_root = path.resolve(test_directory, "..", "..");
   const expected_services = [
     "fracto-admin-server",
+    "fracto-ai-server",
     "fracto-asset-server",
     "fracto-data-server",
     "fracto-tiles-server",
