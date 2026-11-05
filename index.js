@@ -7,6 +7,7 @@ import {handle_logs} from "./handlers/logs.js";
 import {handle_version} from "./handlers/versions.js";
 import {handle_commits} from "./handlers/commits.js";
 import {handle_social} from "./handlers/social.js";
+import {create_chat_router} from "./handlers/chat.js";
 import {handle_reference_document, handle_reference_tree} from "./handlers/reference.js";
 import {handle_ports} from "./handlers/ports.js";
 import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
@@ -34,6 +35,8 @@ app.use((req, res, next) => {
    next();
 });
 
+// Chat authorizes before parsing its bounded request body.
+app.use('/chat', create_chat_router());
 app.use(express.json());
 
 // Start the server and listen for incoming requests

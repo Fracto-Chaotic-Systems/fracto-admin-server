@@ -1,5 +1,66 @@
 # fracto-admin-server
 
+## Admin chat bridge
+
+`POST /chat` (nginx: `/api/admin/chat`) requires the configured UI Origin and a
+current, enabled administrator session by default, even when authentication is optional or
+the lab read-only bypass is enabled. For a private lab only,
+`FRACTO_ADMIN_CHAT_LAB_BYPASS=true` explicitly enables this chat POST without login
+when `FRACTO_AUTH_MODE=none` and `FRACTO_AUTH_REQUIRED` is not true. It does not
+open other admin routes or the AI machine API. The configured UI Origin remains
+mandatory. Both Compose profiles default this separate setting to false.
+Authorization runs before JSON parsing or
+machine-credential reads. The response uses `Cache-Control: no-store`.
+
+Development Compose supports a separate `FRACTO_AI_LAB_MIN_FREE_MEMORY_MIB`
+reserve override, in MiB. It otherwise keeps the ordinary
+`FRACTO_AI_MIN_FREE_MEMORY_MIB`/6144 default; production ignores the lab override.
+Insufficient memory/disk and missing models return fixed, specific chat errors.
+
+The version 1 request is `{ "contract_version": 1, "messages": [
+{ "role": "user", "content": "Hello" } ] }`. Only `user` and `assistant`
+messages are accepted, with a final user message, at most 16 messages and 8192
+UTF-8 bytes of serialized messages. Request bodies are limited to 16 KiB;
+unknown fields, query parameters and compressed bodies are rejected. File data
+and system prompts are outside this text-only bridge contract. The browser can
+extract supported text attachments and include their names and contents in a
+normal user-message string. The bridge's combined message limits still apply;
+there is no raw upload endpoint or file persistence.
+
+The bridge calls only `http://127.0.0.1:<FRACTO_AI_PORT>/inference/chat`
+(default port 3007), without redirects, browser cookies or browser credentials.
+Its `X-Fracto-AI-Token` comes from server-only `FRACTO_AI_INFERENCE_TOKEN`, or
+`<FRACTO_AI_DATA_DIR>/machine-token`. Without a data-directory override, it reads
+the AI service's native `runtime/inference/machine-token`. Existing Compose
+deployments share the private AI data directory with the admin process. If the
+AI service uses an environment token override, supply the same override to the
+admin process; an override configured only in the AI service's own `.env` is not
+inherited by the admin process. Credentials are reread for each request and are
+never returned, logged or forwarded from browser input.
+
+The expected AI response is `{ "contract_version": 1, "message": {
+"role": "assistant", "content": "Hello back" } }`. Only these fields are
+returned to the browser. Responses are bounded to 72 KiB with at most 64 KiB of
+assistant text. The bridge aborts on browser disconnect or after 180 seconds and
+returns fixed error codes without upstream error bodies or configuration details.
+
+The AI service implements `/inference/chat`, and the admin chat UI sends text
+history through this bridge. Missing/unavailable AI services return HTTP 503
+`CHAT_UNAVAILABLE`; generation deadlines return HTTP 504 `CHAT_TIMEOUT`.
+The UI forwards cancellation through both HTTP hops to the local engine.
+
+The UI requests `Accept: application/x-ndjson` to receive incremental text.
+The bridge validates and rebuilds version 1 delta records, then sends a `done`
+record only after the upstream stream completes successfully. Truncated or
+invalid streams produce a fixed terminal error, keeping partial text visible.
+Provider metadata and raw errors are never relayed. Downstream backpressure is
+awaited and `X-Accel-Buffering: no` prevents nginx response buffering. Non-stream
+callers retain the existing JSON response. The existing 180-second bridge timeout
+also bounds streaming, including slow readers; Stop/disconnect aborts upstream.
+
+Run the bridge integration tests from the root checkout with
+`node --test test/admin_chat.test.js`.
+
 The runtime port map includes `ai` (`FRACTO_AI_PORT`, default 3007). AI is also
 included in the repository allowlist for Reference and Commits. Older local port
 files use the default when `ai` is absent; development Compose sets 3107.
