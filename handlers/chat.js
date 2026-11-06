@@ -18,7 +18,14 @@ const exact_fields = (value, fields) =>
   fields.every((field) => Object.hasOwn(value, field));
 
 const valid_request = (body) =>
-  exact_fields(body, ["contract_version", "messages"]) &&
+  exact_fields(
+    body,
+    body && Object.hasOwn(body, "mode")
+      ? ["contract_version", "messages", "mode"]
+      : ["contract_version", "messages"],
+  ) &&
+  (!Object.hasOwn(body, "mode") ||
+    ["chat", "app-reference"].includes(body.mode)) &&
   body.contract_version === 1 &&
   Array.isArray(body.messages) &&
   body.messages.length > 0 &&
@@ -151,11 +158,15 @@ export const create_chat_router = ({
             MEMORY_PRESSURE: "CHAT_MEMORY_PRESSURE",
             DISK_PRESSURE: "CHAT_DISK_PRESSURE",
             MODEL_MISSING: "CHAT_MODEL_MISSING",
+            CHAT_REFERENCE_UNAVAILABLE: "CHAT_REFERENCE_UNAVAILABLE",
           };
           const [status, error] =
-            response.status === 503 && admission_errors[upstream_error]
-              ? [503, admission_errors[upstream_error]]
-              : errors[response.status] || [503, "CHAT_UNAVAILABLE"];
+            response.status === 400 &&
+            upstream_error === "CHAT_REFERENCE_QUESTION"
+              ? [400, "CHAT_REFERENCE_QUESTION"]
+              : response.status === 503 && admission_errors[upstream_error]
+                ? [503, admission_errors[upstream_error]]
+                : errors[response.status] || [503, "CHAT_UNAVAILABLE"];
           if (!res.destroyed) res.status(status).json({ error });
           return;
         }

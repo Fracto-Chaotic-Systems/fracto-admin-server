@@ -2,6 +2,13 @@
 
 ## Admin chat bridge
 
+Chat requests optionally select `mode: "app-reference"` for bounded exact cited
+passages from the AI service's published app snapshot. Missing mode/`"chat"` keeps
+model chat. Authentication, origin checks, machine credentials and streaming
+framing apply to both modes. Fixed `CHAT_REFERENCE_UNAVAILABLE` and
+`CHAT_REFERENCE_QUESTION` errors are preserved without upstream details. See
+`../fracto-ai-server/app_reference/CHAT.md` for retrieval and publication policy.
+
 `POST /chat` (nginx: `/api/admin/chat`) requires the configured UI Origin and a
 current, enabled administrator session by default, even when authentication is optional or
 the lab read-only bypass is enabled. For a private lab only,
@@ -15,7 +22,8 @@ machine-credential reads. The response uses `Cache-Control: no-store`.
 Development Compose supports a separate `FRACTO_AI_LAB_MIN_FREE_MEMORY_MIB`
 reserve override, in MiB. It otherwise keeps the ordinary
 `FRACTO_AI_MIN_FREE_MEMORY_MIB`/6144 default; production ignores the lab override.
-Insufficient memory/disk and missing models return fixed, specific chat errors.
+Insufficient memory/disk and missing models return fixed, specific General chat
+errors. App reference uses read-only retrieval without generation admission.
 
 The version 1 request is `{ "contract_version": 1, "messages": [
 { "role": "user", "content": "Hello" } ] }`. Only `user` and `assistant`
