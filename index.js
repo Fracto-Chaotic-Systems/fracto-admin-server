@@ -11,6 +11,7 @@ import {create_chat_router} from "./handlers/chat.js";
 import {handle_reference_document, handle_reference_tree} from "./handlers/reference.js";
 import {handle_ports} from "./handlers/ports.js";
 import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
+import {create_database_sync_router, create_sync_peer_router} from "./handlers/database_sync.js";
 import {
    is_lab_readonly_admin_bypass,
    require_administrator,
@@ -37,6 +38,8 @@ app.use((req, res, next) => {
 
 // Chat authorizes before parsing its bounded request body.
 app.use('/chat', create_chat_router());
+// Peer exchange uses a dedicated configured secret and authorizes before parsing.
+app.use('/database-sync/peer', create_sync_peer_router());
 app.use(express.json());
 
 // Start the server and listen for incoming requests
@@ -58,3 +61,4 @@ app.get('/ports', handle_ports)
 app.get('/users', handle_users)
 app.get('/login_events', handle_login_events)
 app.put('/users/:id', express.json(), handle_user_update)
+app.use('/database-sync', create_database_sync_router())

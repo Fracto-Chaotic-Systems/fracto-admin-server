@@ -1,5 +1,11 @@
 # fracto-admin-server
 
+## Database synchronization
+
+Server Awareness can preview and apply a two-way database merge with a configured
+trusted peer. See [DATABASE_SYNC.md](DATABASE_SYNC.md) for peer configuration,
+conflict handling, exclusions, consistency guarantees, and disposable tests.
+
 ## Admin chat bridge
 
 Chat requests optionally select `mode: "app-reference"` for bounded exact cited
