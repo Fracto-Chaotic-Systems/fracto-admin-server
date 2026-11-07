@@ -20,6 +20,10 @@ the public server URL saved in Server Awareness. Each entry provides the remote
 admin endpoint and a pair-specific shared secret of at least 32 characters.
 Secrets stay server-side; do not put them in Vite settings or URLs.
 
+This setting is **not a boolean enable flag**. `FRACTO_DATABASE_SYNC_PEERS=true`
+does not supply a remote endpoint or credentials and is invalid. A peer URL must
+match the selected address-book URL, including its scheme and port.
+
 Example on server A (replace the token before use):
 
 ```json
@@ -38,6 +42,17 @@ configurations forward this setting. Recreate the app container after changing
 its environment. An address-book entry grants no database access. Endpoints come
 only from server configuration; redirects are rejected. The application service
 token and browser cookies are never forwarded to the peer.
+
+In a Compose `.env` file, use single quotes around the one-line JSON value:
+
+```dotenv
+FRACTO_DATABASE_SYNC_PEERS='{"https://server-b.example":{"endpoint":"https://server-b.example/api/admin","token":"<the-same-random-pair-secret-on-both-sides>"}}'
+```
+
+On B, the map key and endpoint point back to A. The secret is identical for
+the pair; it is not a URL or a boolean. Recreate the appropriate Compose service
+to apply environment changes. `docker compose restart` alone keeps the old
+container environment. Then reload Server Awareness or reselect the peer.
 
 The configured application database account needs SELECT, INSERT, DELETE,
 LOCK TABLES, and CREATE TEMPORARY TABLES privileges on the included tables.

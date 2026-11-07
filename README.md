@@ -1,5 +1,11 @@
 # fracto-admin-server
 
+## Mesh file synchronization
+
+Server Awareness also shares validated mesh assets between trusted peers through
+the tiles service's live inventory owner. See [MESH_SYNC.md](MESH_SYNC.md) for
+source compatibility, configuration, exclusions and recovery.
+
 ## Database synchronization
 
 Server Awareness can preview and apply a two-way database merge with a configured

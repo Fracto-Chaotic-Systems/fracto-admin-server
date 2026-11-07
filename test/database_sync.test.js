@@ -9,7 +9,10 @@ import {
   create_sync_peer_router,
   create_database_sync_router,
 } from "../handlers/database_sync.js";
-import { require_administrator, is_lab_readonly_admin_bypass } from "../../../utils/admin_authorization.js";
+import {
+  require_administrator,
+  is_lab_readonly_admin_bypass,
+} from "../../../utils/admin_authorization.js";
 import {
   assert_compatible,
   snapshot_digest,
@@ -38,23 +41,79 @@ test("trusted peers are explicit, normalized, secret-separated and reject URL cr
   );
 });
 
+test("boolean and malformed peer settings fail explicitly instead of silently disabling sync", () => {
+  for (const value of [
+    "true",
+    "false",
+    "null",
+    "[]",
+    '"enabled"',
+    "1",
+    "{bad-json",
+    '{"http://peer":null}',
+    '{"http://peer":{"endpoint":"http://admin"}}',
+  ]) {
+    assert.throws(
+      () => configured_peers({ FRACTO_DATABASE_SYNC_PEERS: value }),
+      { code: "invalid_sync_peer_configuration", status: 503 },
+    );
+  }
+  const token = "test-pair-specific-secret-32-characters";
+  const peers = configured_peers({
+    FRACTO_DATABASE_SYNC_PEERS: JSON.stringify({
+      "http://peer/": { endpoint: "http://admin/", token },
+    }),
+  });
+  assert.equal(peers.get("http://peer").endpoint, "http://admin");
+  assert.equal(peers.get("http://peer").token, token);
+});
+
 test("browser sync requires an enabled administrator and the trusted Origin; read-only bypass cannot authorize it", async () => {
   const original_fetch = globalThis.fetch;
-  const origin = process.env.FRACTO_UI_ORIGIN || `http://localhost:${process.env.FRACTO_UI_PORT || 3006}`;
+  const origin =
+    process.env.FRACTO_UI_ORIGIN ||
+    `http://localhost:${process.env.FRACTO_UI_PORT || 3006}`;
   let mutations = 0;
   globalThis.fetch = async (url, options) => {
     if (String(url).endsWith("/auth/session")) {
       const cookie = options.headers.cookie;
-      return { ok: true, json: async () => ({ authenticated: !!cookie, auth_state: "authenticated", user: { enabled: true, role: cookie === "admin" ? "admin" : "user" } }) };
+      return {
+        ok: true,
+        json: async () => ({
+          authenticated: !!cookie,
+          auth_state: "authenticated",
+          user: { enabled: true, role: cookie === "admin" ? "admin" : "user" },
+        }),
+      };
     }
     return original_fetch(url, options);
   };
   const app = express();
   app.use(require_administrator, express.json());
-  app.use("/database-sync", create_database_sync_router({ jobs: { create: () => { mutations++; return { id: "plan", status: "checking" }; } } }));
-  const server = app.listen(0, "127.0.0.1"); await once(server, "listening");
+  app.use(
+    "/database-sync",
+    create_database_sync_router({
+      jobs: {
+        create: () => {
+          mutations++;
+          return { id: "plan", status: "checking" };
+        },
+      },
+    }),
+  );
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
   const url = `http://127.0.0.1:${server.address().port}/database-sync/jobs`;
-  const send = (cookie, trusted = true) => original_fetch(url, { method: "POST", headers: { cookie, origin: trusted ? origin : "https://untrusted.example", "content-type": "application/json" }, body: JSON.stringify({ server_url: "http://peer" }) });
+  const send = (cookie, trusted = true) =>
+    original_fetch(url, {
+      method: "POST",
+      headers: {
+        cookie,
+        origin: trusted ? origin : "https://untrusted.example",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ server_url: "http://peer" }),
+    });
   try {
     assert.equal((await send("")).status, 401);
     assert.equal((await send("enabled-user")).status, 403);
@@ -62,8 +121,17 @@ test("browser sync requires an enabled administrator and the trusted Origin; rea
     assert.equal(mutations, 0);
     assert.equal((await send("admin")).status, 202);
     assert.equal(mutations, 1);
-    assert.equal(is_lab_readonly_admin_bypass({ method: "GET", path: "/database-sync/peers" }, { FRACTO_ADMIN_READONLY_BYPASS: "true", FRACTO_AUTH_MODE: "none" }), false);
-  } finally { globalThis.fetch = original_fetch; await new Promise((resolve) => server.close(resolve)); }
+    assert.equal(
+      is_lab_readonly_admin_bypass(
+        { method: "GET", path: "/database-sync/peers" },
+        { FRACTO_ADMIN_READONLY_BYPASS: "true", FRACTO_AUTH_MODE: "none" },
+      ),
+      false,
+    );
+  } finally {
+    globalThis.fetch = original_fetch;
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("schema and migration guards distinguish incompatible installations; data hashing is order independent", () => {
