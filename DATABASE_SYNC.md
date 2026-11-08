@@ -63,6 +63,13 @@ the pair; it is not a URL or a boolean. Recreate the appropriate Compose service
 to apply environment changes. `docker compose restart` alone keeps the old
 container environment. Then reload Server Awareness or reselect the peer.
 
+If preview reports `sync_peer_unauthorized` (HTTP 403), the peer is reachable
+but does not accept the sending server's configured pair secret. Check the
+entry for that exact selected server, and the peer's entry pointing back to
+the sender. Use the same pair-specific secret on both sides and recreate the
+container whose environment changed; restarting it does not load new values.
+Browser login and SQL migrations do not resolve a rejected peer credential.
+
 The configured application database account needs SELECT, INSERT, DELETE,
 LOCK TABLES, and CREATE TEMPORARY TABLES privileges on the included tables.
 
