@@ -65,7 +65,7 @@ test("sync accepts proven newline-only migration differences but rejects SQL and
 test("snapshots include existing ray caches beyond the old 32 MiB limit and hash without a database-sized escaped wrapper", async () => {
   const value = "x".repeat(1024 * 1024);
   const rows = Array.from({ length: 40 }, (_, i) => [i, value]);
-  const session = new DatabaseSyncSession({ query: async () => [rows] });
+  const session = new DatabaseSyncSession({ execute: async () => [rows] });
   session.manifest = { version: 2, tables: [{ name: "free_bailiwicks" }] };
   const snapshot = await session.read_snapshot();
   assert.equal(snapshot.tables.free_bailiwicks.length, 40);

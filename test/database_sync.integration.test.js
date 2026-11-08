@@ -109,6 +109,18 @@ test(
           "CREATE TABLE children (id INT PRIMARY KEY,parent_id BIGINT UNSIGNED,CONSTRAINT fk_parent FOREIGN KEY(parent_id) REFERENCES parents(id)) ENGINE=InnoDB",
         );
         await admin.query(
+          "CREATE TABLE precision_values (id INT PRIMARY KEY, precise_value DOUBLE NOT NULL, document JSON NOT NULL) ENGINE=InnoDB",
+        );
+        await admin.execute(
+          "INSERT INTO precision_values VALUES (1,?,JSON_OBJECT('nested',JSON_ARRAY(JSON_OBJECT('quoted.key',?)), 'large',CAST(? AS UNSIGNED),'decimal',CAST(? AS DECIMAL(30,20))))",
+          [
+            0.24578629553944692,
+            4.449557262054372e-16,
+            "9007199254740993",
+            "0.12345678901234567890",
+          ],
+        );
+        await admin.query(
           "CREATE TABLE tiles (id INT PRIMARY KEY,value TEXT) ENGINE=InnoDB",
         );
         await admin.query(
@@ -137,6 +149,22 @@ test(
       await admin.query("INSERT INTO children VALUES (3,3)");
       a = await DatabaseSyncSession.open(open(names[0]));
       b = await DatabaseSyncSession.open(open(names[1]));
+      assert.equal(
+        a.snapshot.tables.precision_values[0][1],
+        0.24578629553944692,
+      );
+      assert.match(
+        a.snapshot.tables.precision_values[0][2],
+        /4\.449557262054372e-16/,
+      );
+      assert.match(
+        a.snapshot.tables.precision_values[0][2],
+        /9007199254740993/,
+      );
+      assert.match(
+        a.snapshot.tables.precision_values[0][2],
+        /0\.12345678901234567890/,
+      );
       assert_compatible(a.manifest, b.manifest);
       assert.ok(!a.snapshot.tables.tiles && !a.snapshot.tables.automation);
       const merged = await a.merge(b.snapshot, "remote");

@@ -308,7 +308,9 @@ export class DatabaseSyncJobs {
         throw sync_error("sync_snapshot_changed");
       job.phase = "Merging rows and validating unique keys and references";
       const merged = await local.merge(remote.snapshot, preferred);
+      job.phase = "Preparing this server and checking exact values";
       await local.prepare(merged.snapshot);
+      job.phase = "Transferring and preparing the selected server";
       await this.remote(job.peer, `/sessions/${remote.id}/prepare`, {
         expected: snapshot_digest(remote.snapshot),
         snapshot: merged.snapshot,

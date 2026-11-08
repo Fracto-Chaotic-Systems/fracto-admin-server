@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { canonical_migration_history } from "../../../utils/migration_checksums.js";
+import { json_insert_value } from "./database_sync_values.js";
 
 export const EXCLUDED_TABLES = ["tiles", "automation"];
 export const MAX_BYTES = 512 * 1024 * 1024;
@@ -168,7 +169,7 @@ export async function read_manifest(db) {
     });
   }
   return {
-    version: 3,
+    version: 4,
     migrations: canonical_migration_history(migrations),
     tables,
   };
@@ -188,25 +189,39 @@ async function insert_rows(db, name, table, rows) {
   const columns = writable(table),
     indices = columns.map((c) => table.columns.indexOf(c));
   let batch = [],
-    bytes = 0;
+    bytes = 0,
+    parameter_count = 0;
   const flush = async () => {
     if (!batch.length) return;
     const placeholders = batch
-      .map(() => `(${columns.map(() => "?").join(",")})`)
+      .map((row) => `(${row.map((value) => value.sql).join(",")})`)
       .join(",");
-    await db.query(
+    await db.execute(
       `INSERT INTO ${qi(name)} (${columns.map((c) => qi(c.Field)).join(",")}) VALUES ${placeholders}`,
-      batch.flatMap((row) => indices.map((i) => decode(row[i]))),
+      batch.flatMap((row) => row.flatMap((value) => value.parameters)),
     );
     batch = [];
     bytes = 0;
+    parameter_count = 0;
   };
   for (const row of rows) {
     const size = Buffer.byteLength(JSON.stringify(row));
     if (size > 8 * 1024 * 1024) throw sync_error("sync_row_too_large", 413);
-    if (bytes + size > 1024 * 1024) await flush();
-    batch.push(row);
+    const values = [];
+    for (const index of indices) {
+      const value = decode(row[index]);
+      values.push(
+        table.columns[index].Type === "json"
+          ? await json_insert_value(db, value)
+          : { sql: "?", parameters: [value] },
+      );
+    }
+    const count = values.reduce((n, value) => n + value.parameters.length, 0);
+    if (bytes + size > 1024 * 1024 || parameter_count + count > 60000)
+      await flush();
+    batch.push(values);
     bytes += size;
+    parameter_count += count;
   }
   await flush();
 }
@@ -255,7 +270,7 @@ export class DatabaseSyncSession {
     let bytes = 0,
       count = 0;
     for (const t of this.manifest.tables) {
-      const [rows] = await this.db.query({
+      const [rows] = await this.db.execute({
         sql: `SELECT * FROM ${qi(t.name)} LIMIT 250001`,
         rowsAsArray: true,
       });
@@ -303,7 +318,7 @@ export class DatabaseSyncSession {
             );
             parameters.push(...cells.map(decode));
           }
-          const [existing] = await this.db.query(
+          const [existing] = await this.db.execute(
             {
               sql: `SELECT * FROM ${qi(name)} WHERE ${predicates.join(" OR ")}`,
               rowsAsArray: true,
@@ -334,7 +349,7 @@ export class DatabaseSyncSession {
           }
         }
       }
-      const [merged] = await this.db.query({
+      const [merged] = await this.db.execute({
         sql: `SELECT * FROM ${qi(name)}`,
         rowsAsArray: true,
       });

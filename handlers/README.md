@@ -12,6 +12,10 @@ Route implementations mounted by the Admin service's root `index.js`.
 - `tile.js`: inactive tile placeholder.
 - `users.js`: administrative account operations.
 - `versions.js`: legacy repository version/status reporting.
+- `database_sync.js` and `database_sync_store.js`: trusted peer sessions, merge
+  planning, transactional preparation, and exact equality verification.
+- `database_sync_values.js`: lossless JSON numeric-path scanning and checked
+  binary-double/decimal expressions for JSON numbers that MySQL rounds on parse.
 
 Shared repository paths are owned by `../repositories.js`. Keep request and
 response validation within each handler and follow the root personal-information

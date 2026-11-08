@@ -118,12 +118,19 @@ it never silently starts or completes a sync.
 Bounded transfers support up to 250,000 included rows and 480 MiB of
 encoded snapshot data **per server and resulting union**, and 8 MiB per row.
 The full conflict count is reported with up to 200 examples; the selected server
-preference applies to every conflict. Protocol 3 uses newline-aware migration
-fingerprints, hashes rows incrementally, and uses a 512 MiB
+preference applies to every conflict. Protocol 4 uses newline-aware migration
+fingerprints, exact binary floating-point reads/inserts, incremental row hashing,
+and a 512 MiB
 wire limit, supporting existing large `free_bailiwicks.ray_paths` payloads
 without constructing another escaped database-sized string for verification.
 Both servers need this protocol version; incompatible code is rejected before
 data changes. No SQL migration is required for this protocol update.
+MySQL's text-to-double and JSON parsers can change the last bits of a number.
+JSON transfers first check the native parser, then repair only numeric paths
+that changed using binary doubles or exact decimal casts. Large integer literals
+are retained as text. Each repaired document must serialize identically before
+insertion, and the complete prepared snapshot must still match before commit.
+Unrepresentable JSON precision stops explicitly; verification is never relaxed.
 Exceeding a bound stops explicitly rather than omitting data. Tables require
 primary keys and InnoDB. Views, triggers, functional unique indexes and foreign
 keys crossing the excluded-table boundary are rejected.
