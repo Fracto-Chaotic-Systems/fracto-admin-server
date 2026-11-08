@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import express from "express";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
   configured_peers,
   normalize_peer,
@@ -18,6 +20,47 @@ import {
   snapshot_digest,
   DatabaseSyncSession,
 } from "../handlers/database_sync_store.js";
+
+test("sync accepts proven newline-only migration differences but rejects SQL and schema edits", () => {
+  const sql = readFileSync(
+    new URL("../../../database/migrations/001_baseline.sql", import.meta.url),
+    "utf8",
+  ).replaceAll("\r\n", "\n");
+  const sha = (value) => createHash("sha256").update(value).digest("hex");
+  const left = {
+    version: 2,
+    migrations: [{ version: "001_baseline.sql", checksum: sha(sql) }],
+    tables: [{ name: "example", ddl: "original" }],
+  };
+  const right = {
+    ...left,
+    migrations: [
+      {
+        version: "001_baseline.sql",
+        checksum: sha(sql.replaceAll("\n", "\r\n")),
+      },
+    ],
+  };
+  assert.doesNotThrow(() => assert_compatible(left, right));
+  assert.throws(
+    () =>
+      assert_compatible(left, {
+        ...right,
+        migrations: [
+          { version: "001_baseline.sql", checksum: sha(sql + "-- changed\n") },
+        ],
+      }),
+    /migration_version_mismatch/,
+  );
+  assert.throws(
+    () =>
+      assert_compatible(left, {
+        ...right,
+        tables: [{ name: "example", ddl: "different" }],
+      }),
+    /table_definitions_mismatch/,
+  );
+});
 
 test("snapshots include existing ray caches beyond the old 32 MiB limit and hash without a database-sized escaped wrapper", async () => {
   const value = "x".repeat(1024 * 1024);

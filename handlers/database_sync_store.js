@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { canonical_migration_history } from "../../../utils/migration_checksums.js";
 
 export const EXCLUDED_TABLES = ["tiles", "automation"];
 export const MAX_BYTES = 512 * 1024 * 1024;
@@ -166,14 +167,21 @@ export async function read_manifest(db) {
       foreign,
     });
   }
-  return { version: 2, migrations, tables };
+  return {
+    version: 3,
+    migrations: canonical_migration_history(migrations),
+    tables,
+  };
 }
 
 export function assert_compatible(a, b) {
   if (a.version !== b.version) throw sync_error("sync_protocol_mismatch");
-  if (digest(a.migrations) !== digest(b.migrations))
+  const left = { ...a, migrations: canonical_migration_history(a.migrations) };
+  const right = { ...b, migrations: canonical_migration_history(b.migrations) };
+  if (digest(left.migrations) !== digest(right.migrations))
     throw sync_error("migration_version_mismatch");
-  if (digest(a) !== digest(b)) throw sync_error("table_definitions_mismatch");
+  if (digest(left) !== digest(right))
+    throw sync_error("table_definitions_mismatch");
 }
 
 async function insert_rows(db, name, table, rows) {

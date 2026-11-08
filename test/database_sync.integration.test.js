@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import express from "express";
 import { once } from "node:events";
+import { readFile } from "node:fs/promises";
 import {
   DatabaseSyncJobs,
   create_sync_peer_router,
@@ -16,11 +17,72 @@ import {
 } from "../handlers/database_sync_store.js";
 
 test(
+  "011 completes legacy lore/video schemas without reloading existing rows",
+  { skip: process.env.FRACTO_TEST_MYSQL_SYNC !== "1" },
+  async () => {
+    const schema = `fracto_sync_baseline_verify_${randomBytes(6).toString("hex")}`;
+    const db = await open_sync_database();
+    assert.match(schema, /^fracto_sync_baseline_verify_[a-f0-9]{12}$/);
+    try {
+      await db.query(`CREATE DATABASE \`${schema}\``);
+      await db.changeUser({ database: schema });
+      await db.query(
+        "CREATE TABLE videos (id BIGINT UNSIGNED PRIMARY KEY,title VARCHAR(255) NOT NULL,updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,archived TINYINT(1) NOT NULL DEFAULT 0,meta JSON NOT NULL,script JSON NOT NULL,meta_version INT UNSIGNED NOT NULL DEFAULT 1,script_version INT UNSIGNED NOT NULL DEFAULT 1) ENGINE=InnoDB",
+      );
+      await db.query(
+        "INSERT INTO videos VALUES (1,'keep','2020-01-01 00:00:00',1,'{\"a\":1}','[]',2,3)",
+      );
+      const [before] = await db.query(
+        "SELECT id,title,updated_at,archived,meta,script,meta_version,script_version FROM videos",
+      );
+      const sql = (
+        await readFile(
+          new URL(
+            "../../../database/migrations/011_sync-baseline-tables.sql",
+            import.meta.url,
+          ),
+          "utf8",
+        )
+      ).replace(/^--.*$/gm, "");
+      for (let pass = 0; pass < 2; pass++)
+        for (const statement of sql.split(";").filter((s) => s.trim()))
+          await db.query(statement);
+      const [after] = await db.query(
+        "SELECT id,title,updated_at,archived,meta,script,meta_version,script_version FROM videos",
+      );
+      assert.deepEqual(after, before);
+      const [columns] = await db.query("SHOW COLUMNS FROM videos");
+      assert.equal(columns.at(-1).Field, "archived");
+      for (const name of ["lore_category", "lore_content"]) {
+        const [[row]] = await db.query(`SELECT COUNT(*) AS n FROM ${name}`);
+        assert.equal(Number(row.n), 0);
+      }
+    } finally {
+      assert.match(schema, /^fracto_sync_baseline_verify_[a-f0-9]{12}$/);
+      await db.query(`DROP DATABASE IF EXISTS \`${schema}\``);
+      await db.end();
+    }
+  },
+);
+
+test(
   "real MySQL merge preserves exact values, resolves conflicts, validates keys, and excludes local-only tables",
   { skip: process.env.FRACTO_TEST_MYSQL_SYNC !== "1" },
   async () => {
     const prefix = `fracto_sync_verify_${randomBytes(5).toString("hex")}`;
     const names = [`${prefix}_a`, `${prefix}_b`];
+    const baseline = (
+      await readFile(
+        new URL(
+          "../../../database/migrations/001_baseline.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      )
+    ).replaceAll("\r\n", "\n");
+    const sha = (value) => createHash("sha256").update(value).digest("hex");
+    const baseline_lf = sha(baseline),
+      baseline_crlf = sha(baseline.replaceAll("\n", "\r\n"));
     const admin = await open_sync_database();
     let a, b, server;
     const open = (name) => async () => {
@@ -37,7 +99,8 @@ test(
           "CREATE TABLE fracto_schema_migrations (version VARCHAR(255) PRIMARY KEY,checksum CHAR(64),applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
         );
         await admin.query(
-          "INSERT INTO fracto_schema_migrations VALUES ('001_baseline.sql',REPEAT('a',64),'2026-01-01 00:00:00')",
+          "INSERT INTO fracto_schema_migrations VALUES ('001_baseline.sql',?,'2026-01-01 00:00:00')",
+          [name === names[0] ? baseline_lf : baseline_crlf],
         );
         await admin.query(
           "CREATE TABLE parents (id BIGINT UNSIGNED PRIMARY KEY, label VARCHAR(50) NOT NULL UNIQUE, value DECIMAL(65,30), binary_data BLOB, settings JSON, updated_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)) ENGINE=InnoDB",
@@ -164,9 +227,9 @@ test(
       let job = jobs.create("http://remote.example/");
       await jobs.jobs.get(job.id).completion;
       assert.equal(jobs.get(job.id).error, "migration_version_mismatch");
-      await admin.query(
-        "UPDATE fracto_schema_migrations SET checksum=REPEAT('a',64)",
-      );
+      await admin.query("UPDATE fracto_schema_migrations SET checksum=?", [
+        baseline_lf,
+      ]);
       await admin.query(
         "INSERT INTO parents (id,label) VALUES (5,'http-remote-only')",
       );

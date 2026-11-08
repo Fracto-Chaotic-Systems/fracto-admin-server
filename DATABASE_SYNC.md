@@ -13,6 +13,15 @@ participate. Actual column, index and foreign-key definitions must also match.
 Auto-increment counters are omitted from schema comparison. Migration timestamps
 are ordinary data; checksum/version records must match before synchronization.
 
+Migration comparisons recognize proven LF/CRLF variants of the same SQL file.
+The migration runner uses the same canonical LF fingerprint and accepts legacy
+line-ending hashes, so future checks also work after migration-history rows have
+been synchronized. Existing checksum records are not rewritten just to preview.
+Actual SQL changes and table-definition differences remain blocking errors.
+Install migration 011 on legacy databases missing the lore tables or using the
+older video-column order; this is a separate migration, not a sync-side schema
+repair or a replay of existing migrations.
+
 ## Configure peers
 
 Set `FRACTO_DATABASE_SYNC_PEERS` on **both** servers. It is a JSON object keyed by
@@ -109,7 +118,8 @@ it never silently starts or completes a sync.
 Bounded transfers support up to 250,000 included rows and 480 MiB of
 encoded snapshot data **per server and resulting union**, and 8 MiB per row.
 The full conflict count is reported with up to 200 examples; the selected server
-preference applies to every conflict. Protocol 2 hashes rows incrementally and uses a 512 MiB
+preference applies to every conflict. Protocol 3 uses newline-aware migration
+fingerprints, hashes rows incrementally, and uses a 512 MiB
 wire limit, supporting existing large `free_bailiwicks.ray_paths` payloads
 without constructing another escaped database-sized string for verification.
 Both servers need this protocol version; incompatible code is rejected before
