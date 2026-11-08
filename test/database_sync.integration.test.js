@@ -188,6 +188,21 @@ test(
       a = await DatabaseSyncSession.open(open(names[0]));
       b = await DatabaseSyncSession.open(open(names[1]));
       assert.equal(snapshot_digest(a.snapshot), snapshot_digest(b.snapshot));
+      const ids = Array.from({ length: 2050 }, (_, i) => i + 1000);
+      for (const [session, prefix] of [
+        [a, "left"],
+        [b, "right"],
+      ]) {
+        await session.db.query(
+          "INSERT INTO parents (id,label) VALUES " +
+            ids.map(() => "(?,?)").join(","),
+          ids.flatMap((id) => [id, `${prefix}-${id}`]),
+        );
+        session.snapshot = await session.read_snapshot();
+      }
+      const many = await a.merge(b.snapshot);
+      assert.equal(many.conflict_count, 2050);
+      assert.equal(many.conflicts.length, 200);
       assert.ok(
         a.snapshot.tables.parents.some((r) => r[1] === "http-remote-only"),
       );

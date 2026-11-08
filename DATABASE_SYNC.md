@@ -64,6 +64,15 @@ Peer exchange at `/database-sync/peer` requires its separate secret before body
 parsing. The read-only lab bypass does not authorize sync. Browser mutations
 retain normal administrator and Origin checks.
 
+For an isolated lab that deliberately uses `FRACTO_AUTH_MODE=none`, opt in with
+`FRACTO_ADMIN_SYNC_LAB_BYPASS=true` and set `FRACTO_UI_ORIGIN` to the exact browser
+origin (scheme, host, port). This separate setting permits only database/mesh
+sync peer lists, job status, preview and apply routes. It requires a matching
+Origin header, or for same-origin GET requests a matching Referer. It never
+grants access to user management or other admin mutations, never replaces peer
+secrets, and is ignored when authentication mode is not `none` or authentication
+is required. Its default is false. The read-only bypass remains read-only.
+
 Preview is read-only for application tables. It briefly takes exclusive table
 locks to produce stable snapshots. Apply reacquires locks and rejects changed
 snapshots: new data requires another preview. Pause job runs on both servers
@@ -97,8 +106,14 @@ are retained. The browser remembers a job ID per peer in session storage and
 reattaches when revisiting that server. Service restart requires a fresh preview;
 it never silently starts or completes a sync.
 
-Initial bounded transfers support up to 250,000 included rows and 32 MiB of
-encoded snapshot data **per server**, 8 MiB per row, and 2,000 conflict records.
+Bounded transfers support up to 250,000 included rows and 480 MiB of
+encoded snapshot data **per server and resulting union**, and 8 MiB per row.
+The full conflict count is reported with up to 200 examples; the selected server
+preference applies to every conflict. Protocol 2 hashes rows incrementally and uses a 512 MiB
+wire limit, supporting existing large `free_bailiwicks.ray_paths` payloads
+without constructing another escaped database-sized string for verification.
+Both servers need this protocol version; incompatible code is rejected before
+data changes. No SQL migration is required for this protocol update.
 Exceeding a bound stops explicitly rather than omitting data. Tables require
 primary keys and InnoDB. Views, triggers, functional unique indexes and foreign
 keys crossing the excluded-table boundary are rejected.

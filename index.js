@@ -13,6 +13,7 @@ import {handle_ports} from "./handlers/ports.js";
 import {handle_login_events, handle_user_update, handle_users} from "./handlers/users.js";
 import {create_database_sync_router, create_sync_peer_router} from "./handlers/database_sync.js";
 import {create_mesh_peer_router, create_mesh_sync_router} from "./handlers/mesh_sync.js";
+import {create_sync_authorizer} from "./handlers/sync_authorization.js";
 import {
    is_lab_readonly_admin_bypass,
    require_administrator,
@@ -43,6 +44,8 @@ app.use('/chat', create_chat_router());
 app.use('/database-sync/peer', create_sync_peer_router());
 app.use('/mesh-sync/peer', create_mesh_peer_router());
 app.use(express.json());
+app.use('/database-sync', create_sync_authorizer(), create_database_sync_router());
+app.use('/mesh-sync', create_sync_authorizer(), create_mesh_sync_router());
 
 // Start the server and listen for incoming requests
 app.listen(FRACTO_ADMIN_PORT, () => {
@@ -63,5 +66,3 @@ app.get('/ports', handle_ports)
 app.get('/users', handle_users)
 app.get('/login_events', handle_login_events)
 app.put('/users/:id', express.json(), handle_user_update)
-app.use('/database-sync', create_database_sync_router())
-app.use('/mesh-sync', create_mesh_sync_router())

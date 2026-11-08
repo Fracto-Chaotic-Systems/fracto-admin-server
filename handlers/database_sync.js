@@ -249,6 +249,7 @@ export class DatabaseSyncJobs {
       job.local_snapshot = local.snapshot;
       job.remote_snapshot = remote.snapshot;
       job.conflicts = merged.conflicts;
+      job.conflict_count = merged.conflict_count;
       job.tables = local.manifest.tables.map((t) => ({
         name: t.name,
         local_rows: local.snapshot.tables[t.name].length,

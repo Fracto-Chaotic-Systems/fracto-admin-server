@@ -74,6 +74,11 @@ Administrator and trusted-Origin checks protect browser mutations. Peer requests
 use the dedicated pair secret, and internal mesh-store requests require the
 private service token before parsing transfer bodies.
 
+Anonymous isolated labs may explicitly enable `FRACTO_ADMIN_SYNC_LAB_BYPASS=true`
+with `FRACTO_AUTH_MODE=none`, authentication not required, and an exact
+`FRACTO_UI_ORIGIN`. This permits only the sync workflow from that origin; other
+administrator actions and peer-secret requirements remain unchanged.
+
 ## Verification
 
 From the root: `npm run test:mesh-sync`.

@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 export const EXCLUDED_TABLES = ["tiles", "automation"];
-export const MAX_BYTES = 64 * 1024 * 1024;
+export const MAX_BYTES = 512 * 1024 * 1024;
+export const MAX_SNAPSHOT_BYTES = 480 * 1024 * 1024;
 export const sync_error = (code, status = 409) =>
   Object.assign(new Error(code), { code, status });
 export const digest = (value) =>
@@ -28,14 +29,38 @@ const row_key = (table, row) =>
     ),
   );
 
-export const snapshot_digest = (snapshot) =>
-  digest({
-    manifest: snapshot.manifest,
-    tables: snapshot.manifest.tables.map((t) => [
-      t.name,
-      snapshot.tables[t.name].map((r) => JSON.stringify(r)).sort(),
-    ]),
-  });
+export const snapshot_digest = (snapshot) => {
+  const hash = createHash("sha256");
+  const append = (value) => {
+    hash.update(String(Buffer.byteLength(value)) + ":");
+    hash.update(value);
+  };
+  append(JSON.stringify(snapshot.manifest));
+  for (const table of snapshot.manifest.tables) {
+    append(table.name);
+    // Hash rows incrementally instead of serializing an escaped copy of the
+    // entire database into one giant JavaScript string.
+    const rows = snapshot.tables[table.name]
+      .map((row) => JSON.stringify(row))
+      .sort();
+    append(String(rows.length));
+    for (const row of rows) append(row);
+  }
+  return hash.digest("hex");
+};
+const row_bytes = (rows) =>
+  rows.reduce((n, row) => n + Buffer.byteLength(JSON.stringify(row)) + 1, 2);
+const assert_snapshot_budget = (snapshot) => {
+  let bytes = Buffer.byteLength(JSON.stringify(snapshot.manifest)),
+    count = 0;
+  for (const table of snapshot.manifest.tables) {
+    const rows = snapshot.tables[table.name];
+    count += rows.length;
+    bytes += row_bytes(rows);
+    if (count > 250000 || bytes > MAX_SNAPSHOT_BYTES)
+      throw sync_error("sync_snapshot_limit", 413);
+  }
+};
 
 export async function open_sync_database() {
   const config = JSON.parse(
@@ -141,10 +166,11 @@ export async function read_manifest(db) {
       foreign,
     });
   }
-  return { version: 1, migrations, tables };
+  return { version: 2, migrations, tables };
 }
 
 export function assert_compatible(a, b) {
+  if (a.version !== b.version) throw sync_error("sync_protocol_mismatch");
   if (digest(a.migrations) !== digest(b.migrations))
     throw sync_error("migration_version_mismatch");
   if (digest(a) !== digest(b)) throw sync_error("table_definitions_mismatch");
@@ -227,8 +253,8 @@ export class DatabaseSyncSession {
       });
       tables[t.name] = rows.map((r) => r.map(encode));
       count += rows.length;
-      bytes += Buffer.byteLength(JSON.stringify(tables[t.name]));
-      if (count > 250000 || bytes > MAX_BYTES / 2)
+      bytes += row_bytes(tables[t.name]);
+      if (count > 250000 || bytes > MAX_SNAPSHOT_BYTES)
         throw sync_error("sync_snapshot_limit", 413);
     }
     return { manifest: this.manifest, tables };
@@ -239,6 +265,7 @@ export class DatabaseSyncSession {
     const second = preferred === "remote" ? this.snapshot : other;
     const conflicts = [],
       tables = {};
+    let conflict_count = 0;
     for (const [index, table] of this.manifest.tables.entries()) {
       const name = temp_name(index);
       await this.db.query(`DROP TEMPORARY TABLE IF EXISTS ${qi(name)}`);
@@ -277,19 +304,25 @@ export class DatabaseSyncSession {
           );
           for (const current of existing.map((r) => r.map(encode))) {
             if (JSON.stringify(current) === JSON.stringify(row)) continue;
-            if (conflicts.length >= 2000)
-              throw sync_error("too_many_sync_conflicts");
-            conflicts.push({
-              table: table.name,
-              local_key: row_key(table, preferred === "local" ? current : row),
-              remote_key: row_key(table, preferred === "local" ? row : current),
-              columns: table.columns
-                .filter(
-                  (c, i) =>
-                    JSON.stringify(current[i]) !== JSON.stringify(row[i]),
-                )
-                .map((c) => c.Field),
-            });
+            conflict_count++;
+            if (conflicts.length < 200)
+              conflicts.push({
+                table: table.name,
+                local_key: row_key(
+                  table,
+                  preferred === "local" ? current : row,
+                ),
+                remote_key: row_key(
+                  table,
+                  preferred === "local" ? row : current,
+                ),
+                columns: table.columns
+                  .filter(
+                    (c, i) =>
+                      JSON.stringify(current[i]) !== JSON.stringify(row[i]),
+                  )
+                  .map((c) => c.Field),
+              });
           }
         }
       }
@@ -299,9 +332,12 @@ export class DatabaseSyncSession {
       });
       tables[table.name] = merged.map((r) => r.map(encode));
     }
-    return { snapshot: { manifest: this.manifest, tables }, conflicts };
+    const snapshot = { manifest: this.manifest, tables };
+    assert_snapshot_budget(snapshot);
+    return { snapshot, conflicts, conflict_count };
   }
   async prepare(snapshot) {
+    assert_snapshot_budget(snapshot);
     assert_compatible(this.manifest, await read_manifest(this.db));
     assert_compatible(this.manifest, snapshot.manifest);
     // Native temporary indexes validate collisions using the real MySQL collations.

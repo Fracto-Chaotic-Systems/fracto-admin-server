@@ -16,7 +16,33 @@ import {
 import {
   assert_compatible,
   snapshot_digest,
+  DatabaseSyncSession,
 } from "../handlers/database_sync_store.js";
+
+test("snapshots include existing ray caches beyond the old 32 MiB limit and hash without a database-sized escaped wrapper", async () => {
+  const value = "x".repeat(1024 * 1024);
+  const rows = Array.from({ length: 40 }, (_, i) => [i, value]);
+  const session = new DatabaseSyncSession({ query: async () => [rows] });
+  session.manifest = { version: 2, tables: [{ name: "free_bailiwicks" }] };
+  const snapshot = await session.read_snapshot();
+  assert.equal(snapshot.tables.free_bailiwicks.length, 40);
+  assert.match(snapshot_digest(snapshot), /^[a-f0-9]{64}$/);
+  assert.equal(
+    snapshot_digest(snapshot),
+    snapshot_digest({
+      ...snapshot,
+      tables: { free_bailiwicks: [...rows].reverse() },
+    }),
+  );
+  assert.throws(
+    () =>
+      assert_compatible(
+        { ...snapshot.manifest, version: 1 },
+        snapshot.manifest,
+      ),
+    /sync_protocol_mismatch/,
+  );
+});
 
 test("trusted peers are explicit, normalized, secret-separated and reject URL credentials", () => {
   assert.equal(configured_peers({}).size, 0);
