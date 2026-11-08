@@ -16,6 +16,8 @@ Route implementations mounted by the Admin service's root `index.js`.
   planning, transactional preparation, and exact equality verification.
 - `database_sync_values.js`: lossless JSON numeric-path scanning and checked
   binary-double/decimal expressions for JSON numbers that MySQL rounds on parse.
+- `mesh_sync_session.js`: asynchronous inventory acquisition and progress polling,
+  failed-acquisition cleanup, and compatibility with legacy peer endpoints.
 
 Shared repository paths are owned by `../repositories.js`. Keep request and
 response validation within each handler and follow the root personal-information

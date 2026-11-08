@@ -35,11 +35,27 @@ Storage layouts may differ: short codes map to each receiver's own `level` or
 `shortcode` directory layout. The sync never asks the receiver to read/download
 numerical tiles or calculate new meshes.
 
+The current namespace includes the compiled index fingerprint, which itself
+includes packet-file timestamps. Identical numerical tile releases installed
+with different packet timestamps can therefore advertise different namespaces.
+A namespace mismatch is not proof that numerical tile bytes differ; the guard
+still rejects it. Resolving that case requires a portable source identity and
+an explicit compatibility/migration strategy for already stored mesh headers.
+
 ## Consistency and recovery
 
 Preview acquires a short-lived reservation on each mesh store, reconciles file
 observations with the local inventory, and displays per-level counts, conflicts,
 and transfer totals. Reservations are released before the operator reviews it.
+Inventory acquisition starts a background scan and polls authenticated status
+requests, reporting checked-file counts in the preview progress text. This avoids
+the old four-minute HTTP deadline on large or initially cold mesh volumes.
+An acquisition is bounded to one hour. Abandoned scans finish their outstanding
+reads before releasing the store; completed inventory observations remain durable.
+The local source identity is compared with the peer before the local file scan;
+incompatible namespaces or build profiles stop without scanning the large volume.
+Older servers without asynchronous acquisition use the legacy endpoint; update
+their admin and tiles services too if their scans exceed the legacy timeout.
 Apply reacquires both stores and rejects changed preview catalogs. Mesh job
 queues cannot start generation while a store is reserved; sync cannot acquire
 a store with queued/running mesh jobs or pending mesh writes. Other terrain reads

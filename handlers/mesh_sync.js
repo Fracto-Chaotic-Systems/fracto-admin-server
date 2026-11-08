@@ -6,6 +6,7 @@ import {
   require_sync_peer,
 } from "./database_sync.js";
 import { internal_service_headers } from "../../../utils/service_authorization.js";
+import { acquire_mesh_session } from "./mesh_sync_session.js";
 
 const LIMIT = 24 * 1024 * 1024;
 const CATALOG_LIMIT = 64 * 1024 * 1024;
@@ -40,24 +41,43 @@ async function request(url, body, headers) {
     if (size > CATALOG_LIMIT) throw fail("mesh_transfer_limit", 413);
     chunks.push(Buffer.from(chunk));
   }
-  const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  let result;
+  try {
+    result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw fail(
+      response.status === 404
+        ? "mesh_catalog_incompatible"
+        : "mesh_invalid_response",
+      response.status >= 400 ? response.status : 502,
+    );
+  }
   if (!response.ok)
     throw fail(result.error || "mesh_sync_failed", response.status);
   return result;
 }
-export const local_mesh_request = (path, body = {}) => {
+export const local_mesh_request = (path, body = {}, on_progress) => {
   if (!process.env.FRACTO_INTERNAL_SERVICE_TOKEN)
     throw fail("mesh_internal_token_missing", 503);
-  return request(
-    `http://127.0.0.1:${Number(process.env.FRACTO_TILES_PORT || 3004)}/internal/mesh-sync${path}`,
-    body,
-    internal_service_headers(),
-  );
+  const send = (action, payload = {}) =>
+    request(
+      `http://127.0.0.1:${Number(process.env.FRACTO_TILES_PORT || 3004)}/internal/mesh-sync${action}`,
+      payload,
+      internal_service_headers(),
+    );
+  return path === "/sessions"
+    ? acquire_mesh_session(send, on_progress)
+    : send(path, body);
 };
-export const peer_mesh_request = (peer, path, body = {}) =>
-  request(`${peer.endpoint}/mesh-sync/peer${path}`, body, {
-    "x-fracto-sync-token": peer.token,
-  });
+export const peer_mesh_request = (peer, path, body = {}, on_progress) => {
+  const send = (action, payload = {}) =>
+    request(`${peer.endpoint}/mesh-sync/peer${action}`, payload, {
+      "x-fracto-sync-token": peer.token,
+    });
+  return path === "/sessions"
+    ? acquire_mesh_session(send, on_progress)
+    : send(path, body);
+};
 
 export function create_mesh_peer_router({
   local = local_mesh_request,
@@ -67,9 +87,15 @@ export function create_mesh_peer_router({
     sessions = new Map();
   router.use(require_sync_peer(peers), express.json({ limit: LIMIT }));
   router.post(
-    "/sessions",
+    ["/sessions", "/sessions/start"],
     safe(async (req, res) => {
-      const opened = await local("/sessions");
+      const opened = await local(
+        req.path === "/sessions/start" ? "/sessions/start" : "/sessions",
+      );
+      if (res.destroyed) {
+        await local(`/sessions/${opened.id}/close`).catch(() => {});
+        return;
+      }
       // The tiles service owns lease expiry. Only a successful new reservation
       // proves any previous mapping is obsolete; a busy attempt must preserve it.
       sessions.clear();
@@ -78,7 +104,12 @@ export function create_mesh_peer_router({
         local_id: opened.id,
         owner: req.sync_owner,
       });
-      res.json({ id, catalog: opened.catalog });
+      res.json({
+        id,
+        ...(opened.catalog
+          ? { catalog: opened.catalog }
+          : { status: opened.status, files_checked: opened.files_checked }),
+      });
     }),
   );
   router.post(
@@ -89,7 +120,7 @@ export function create_mesh_peer_router({
       if (!entry || entry.owner !== req.sync_owner)
         throw fail("mesh_session_expired", 404);
       if (
-        !["close", "catalog", "read", "write"].includes(action) ||
+        !["close", "status", "catalog", "read", "write"].includes(action) ||
         (["read", "write"].includes(action)
           ? !/^[0-3]{2,34}$/.test(code || "")
           : code !== undefined)
@@ -278,8 +309,25 @@ export class MeshSyncJobs {
   async preview(job) {
     let a, b;
     try {
-      a = await this.local("/sessions");
-      b = await this.remote(job.peer, "/sessions");
+      let identity;
+      try {
+        identity = await this.local("/identity");
+      } catch (error) {
+        if (
+          error.status !== 404 &&
+          !(error.status === 403 && error.code === "Untrusted request origin")
+        )
+          throw error;
+      }
+      job.phase = "Checking the selected server's mesh files";
+      b = await this.remote(job.peer, "/sessions", {}, ({ files_checked }) => {
+        job.phase = `Checking selected server's mesh files: ${files_checked} checked`;
+      });
+      // Reject incompatible sources before scanning a potentially huge local volume.
+      if (identity) plan_mesh_sync({ ...identity, records: [] }, b.catalog);
+      a = await this.local("/sessions", {}, ({ files_checked }) => {
+        job.phase = `Checking this server's mesh files: ${files_checked} checked`;
+      });
       const plan = plan_mesh_sync(a.catalog, b.catalog);
       Object.assign(job, {
         local_catalog: a.catalog,
