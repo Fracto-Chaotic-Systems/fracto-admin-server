@@ -18,6 +18,15 @@ Route implementations mounted by the Admin service's root `index.js`.
   binary-double/decimal expressions for JSON numbers that MySQL rounds on parse.
 - `mesh_sync_session.js`: asynchronous inventory acquisition and progress polling,
   failed-acquisition cleanup, and compatibility with legacy peer endpoints.
+- `instrument_transfer.js`, `instrument_transfer_jobs.js` and
+  `instrument_transfer_client.js`: authorized peer/browser inventory/transfer routes,
+  asynchronous planning, bounded JSON requests and cancellation cleanup.
+- `instrument_transfer_binary.js` streams file bodies between authenticated hops;
+  `instrument_transfer_send.js` reserves both ends and runs the bounded worker pool.
+  `instrument_transfer_publish.js` validates the durable receiver receipt, including
+  after a lost finalize acknowledgement. Apply completes only after live-library
+  publication when both backends support it; staging-only older peers retain their
+  explicit staged result. See `../INSTRUMENT_TRANSFER.md`.
 
 Shared repository paths are owned by `../repositories.js`. Keep request and
 response validation within each handler and follow the root personal-information

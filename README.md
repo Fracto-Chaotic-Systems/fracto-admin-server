@@ -1,5 +1,16 @@
 # fracto-admin-server
 
+## Instrument inventory and preview
+
+[Instrument transfer protocol 1](INSTRUMENT_TRANSFER.md) defines the planned
+one-way package export/repair between trusted servers, including sender/receiver
+routes, integrity, publication and recovery. Inventory, preview and staged binary
+transfer APIs work on both ends. Apply publishes compatible libraries and checks a
+durable receiver receipt before reporting completed. The Servers page offers
+preview, pinned-plan export, progress, cancellation and verified receipts for the
+selected trusted connection. The contract documents
+configuration, current API scope and isolated verification commands.
+
 ## Mesh file synchronization
 
 Server Awareness also shares validated mesh assets between trusted peers through

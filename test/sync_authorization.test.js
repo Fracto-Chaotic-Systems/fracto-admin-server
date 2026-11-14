@@ -14,6 +14,39 @@ const env = {
   FRACTO_UI_ORIGIN: "http://localhost:3106",
 };
 const id = "00000000-0000-4000-8000-000000000001";
+test("instrument lab access has an exact browser-only route and method allowlist", () => {
+  for (const [method, path] of [
+    ["GET", "/instrument-transfer/peers"],
+    ["GET", `/instrument-transfer/jobs/${id}`],
+    ["POST", "/instrument-transfer/jobs"],
+    ["POST", `/instrument-transfer/jobs/${id}/apply`],
+    ["POST", `/instrument-transfer/jobs/${id}/cancel`],
+  ]) {
+    assert.equal(is_lab_sync_request({ method, path }, env), true);
+    assert.equal(
+      is_lab_sync_request(
+        { method, path },
+        { ...env, FRACTO_ADMIN_SYNC_LAB_BYPASS: "false" },
+      ),
+      false,
+    );
+    assert.equal(
+      is_lab_sync_request(
+        { method, path },
+        { ...env, FRACTO_AUTH_MODE: "oidc" },
+      ),
+      false,
+    );
+  }
+  for (const [method, path] of [
+    ["PUT", `/instrument-transfer/jobs/${id}/apply`],
+    ["POST", "/instrument-transfer/peers"],
+    ["GET", "/instrument-transfer/jobs"],
+    ["POST", "/instrument-transfer/jobs/bad/apply"],
+    ["POST", `/instrument-transfer/jobs/${id}/cancel/extra`],
+  ])
+    assert.equal(is_lab_sync_request({ method, path }, env), false);
+});
 test("lab sync is opt-in, unavailable in authenticated mode, and restricted to sync routes", () => {
   const req = { method: "POST", path: "/database-sync/jobs" };
   assert.equal(is_lab_sync_request(req, env), true);
@@ -33,6 +66,9 @@ test("lab sync is opt-in, unavailable in authenticated mode, and restricted to s
     "/users",
     "/database-sync/peer/sessions",
     "/mesh-sync/peer/sessions",
+    "/instrument-transfer/peer/sessions",
+    "/internal/instrument-transfer/sessions",
+    `/instrument-transfer/jobs/${id}/files`,
     "/query",
     `/database-sync/jobs/${id}/cancel`,
   ])
@@ -63,11 +99,16 @@ test("lab preview and apply require the exact browser origin, including same-ori
       res.status(401).json({ error: "admin required" });
     },
   });
-  for (const prefix of ["/database-sync", "/mesh-sync"]) {
+  for (const prefix of [
+    "/database-sync",
+    "/mesh-sync",
+    "/instrument-transfer",
+  ]) {
     const router = express.Router();
     router.get("/peers", (_req, res) => res.json({ ok: true }));
     router.post("/jobs", (_req, res) => res.json({ ok: true }));
     router.post("/jobs/:id/apply", (_req, res) => res.json({ ok: true }));
+    router.post("/jobs/:id/cancel", (_req, res) => res.json({ ok: true }));
     router.post("/peer/sessions", (_req, res) => res.json({ ok: true }));
     app.use(prefix, authorize, router);
   }
@@ -75,7 +116,11 @@ test("lab preview and apply require the exact browser origin, including same-ori
   await once(server, "listening");
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    for (const prefix of ["/database-sync", "/mesh-sync"]) {
+    for (const prefix of [
+      "/database-sync",
+      "/mesh-sync",
+      "/instrument-transfer",
+    ]) {
       assert.equal(
         (
           await fetch(base + prefix + "/peers", {
@@ -121,7 +166,25 @@ test("lab preview and apply require the exact browser origin, including same-ori
         401,
       );
     }
-    assert.equal(fallback, 2);
+    assert.equal(
+      (
+        await fetch(base + `/instrument-transfer/jobs/${id}/cancel`, {
+          method: "POST",
+          headers: { origin: env.FRACTO_UI_ORIGIN },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await fetch(base + `/instrument-transfer/jobs/${id}/cancel`, {
+          method: "POST",
+          headers: { origin: "http://untrusted.example" },
+        })
+      ).status,
+      403,
+    );
+    assert.equal(fallback, 3);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

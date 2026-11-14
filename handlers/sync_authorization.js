@@ -13,14 +13,20 @@ export function is_lab_sync_request(req, env = process.env) {
   const uuid = "[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}";
   if (req.method === "GET")
     return new RegExp(
-      `^/(database-sync|mesh-sync)/(peers|jobs/${uuid})$`,
+      `^/(database-sync|mesh-sync|instrument-transfer)/(peers|jobs/${uuid})$`,
       "i",
     ).test(path);
   if (req.method === "POST")
-    return new RegExp(
-      `^/(database-sync|mesh-sync)/jobs(?:/${uuid}/apply)?$`,
-      "i",
-    ).test(path);
+    return (
+      new RegExp(
+        `^/instrument-transfer/jobs(?:/${uuid}/(?:apply|cancel))?$`,
+        "i",
+      ).test(path) ||
+      new RegExp(
+        `^/(database-sync|mesh-sync)/jobs(?:/${uuid}/apply)?$`,
+        "i",
+      ).test(path)
+    );
   return false;
 }
 
