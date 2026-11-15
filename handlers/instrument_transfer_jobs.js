@@ -42,7 +42,12 @@ export function preview_summary(value) {
     !Array.isArray(value.conflict_file_ids) ||
     value.conflict_file_ids.length > 100 ||
     value.conflict_file_ids.some((id) => !is_hash(id)) ||
-    value.publication_state !== "unchanged"
+    value.publication_state !== "unchanged" ||
+    ["replacement_bytes", "replacement_files"].some(
+      (key) =>
+        value[key] !== undefined &&
+        (!Number.isSafeInteger(value[key]) || value[key] < 0),
+    )
   )
     throw transfer_error("invalid_manifest", 400);
   return {
@@ -50,6 +55,8 @@ export function preview_summary(value) {
     target_catalog_sha256: value.target_catalog_sha256,
     ...Object.fromEntries(numeric_summary.map((key) => [key, value[key]])),
     conflict_file_ids: value.conflict_file_ids,
+    replacement_bytes: value.replacement_bytes ?? 0,
+    replacement_files: value.replacement_files ?? value.conflict_files,
     publication_state: "unchanged",
   };
 }
@@ -191,6 +198,12 @@ export class InstrumentTransferJobs {
     job.publication_supported = results.every(
       (r) => r.status === "fulfilled" && r.value.publication_supported === true,
     );
+    job.replacement_policy =
+      results[1].status === "fulfilled" &&
+      results[1].value.replacement_policies?.includes("source") &&
+      job.publication_supported
+        ? "source"
+        : "preserve";
     for (const result of results) {
       if (result.status === "rejected") throw result.reason;
       const caps = result.value;
@@ -239,6 +252,9 @@ export class InstrumentTransferJobs {
       protocol_version: 1,
       manifest,
       catalog_text: package_results[1].value,
+      ...(job.replacement_policy === "source"
+        ? { replacement_policy: "source" }
+        : {}),
     };
     if (
       manifest.files.length > limits.manifest_files ||
@@ -278,13 +294,14 @@ export class InstrumentTransferJobs {
       ...job.progress,
       files_checked: summary.package_files,
       files_verified: summary.matching_files,
-      bytes_to_transfer: summary.missing_bytes,
+      bytes_to_transfer: summary.missing_bytes + summary.replacement_bytes,
     };
     job.plan_sha256 = json_hash({
       protocol_version: 1,
       peer: job.peer_url,
       manifest_sha256: job.manifest_sha256,
       target_snapshot_sha256: target.target_snapshot_sha256,
+      replacement_policy: job.replacement_policy,
     });
     job.deadline = this.now() + TRANSFER_LIMITS.preview_seconds * 1000;
     job.state = target.state;
@@ -346,6 +363,7 @@ export class InstrumentTransferJobs {
       error: job.error,
       preview_only: !job.staging_supported,
       publication_supported: Boolean(job.publication_supported),
+      replacement_policy: job.replacement_policy ?? "preserve",
       receipt: job.receipt ?? null,
     };
   }

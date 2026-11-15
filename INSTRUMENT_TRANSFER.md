@@ -4,6 +4,11 @@ Status: **step 6 locally verified; deployment prepared**. Inventory, preview,
 reservation, streamed transfer, full candidate/live validation and durable
 publication work on both ends. Servers-page controls review and start exports,
 track progress, cancel and verify receipts.
+The lab initialization extension negotiates `replacement_policy: "source"` to
+make the destination's registered package identical to the selected source.
+Missing and differing files, including catalogs and CRLF-only notices, are staged,
+validated and published with backups; no manual newline normalization is needed.
+An older sender or receiver retains the original preserve/block behavior.
 Capabilities advertise `preview_only: false`, `staging_supported: true` and
 `publication_supported: true`; job status reports the negotiated peer capability.
 Production playback/listening acceptance is performed by the operator after deployment.
@@ -59,7 +64,8 @@ skips them after cancellation, a lost acknowledgement or a process restart.
 catalog exists only in staging. Partial bodies never count as matching. Ordinary
 cancellation removes its uniquely-created `.part`; a hard process crash may leave
 an inert `.part`, which is excluded from previews/exports and never resumed.
-Verified cache files are immutable and are retained; automatic cache pruning is
+Verified cache files are retained; a corrupt cache entry can be atomically replaced
+only after receiving and checking the complete expected source bytes. Automatic cache pruning is
 outside this step. Retained bytes are included in filesystem free-space checks.
 
 Apply reserves the source first, rehashes its pinned package asynchronously, then
@@ -68,20 +74,25 @@ without waiting on another reservation. At most two file requests run concurrent
 with bounded buffers and HTTP backpressure through both admin hops. Source file
 hash/identity are checked before its final chunk; the receiver checks length/hash,
 fsyncs the temporary file, and atomically links it into the verified cache without
-overwriting an existing file. Supported directory fsync is also performed.
+overwriting a matching existing file; corrupt cache entries are replaced only with
+fully verified bytes. Supported directory fsync is also performed.
 No success acknowledgement is returned for unverified bytes. An interrupted or
 uncertain transfer reports `partial` when verified staged writes may remain.
 Retry requires a fresh preview; incomplete files restart at byte zero. Applying
 the same accepted plan while active or completed returns the existing job.
 
 Existing catalog bytes are preserved in `.instrument-transfer/backups/<sha>.json`.
-An absent previous catalog is recorded as null in the journal. Protocol 1 still
-blocks a different installed catalog; for an identical catalog it repairs files
-and explicitly invalidates runtime snapshots without changing catalog bytes/mtime.
-Validated missing dependencies are installed first using atomic no-clobber links;
-an absent catalog is then atomically linked into place. Destination-only files and
-older audio remain. During identical-catalog repair, individual files may become
-readable before the whole job completes; completion requires the full package.
+An absent previous catalog is recorded as null in the journal. With negotiated
+source replacement, differing live files are backed up under
+`.instrument-transfer/backups/<session-id>/<relative-path>` and replaced by atomic
+rename of verified candidate links. Backups retain old inodes; no live bytes are
+edited in place. Dependencies install before the catalog. The previous catalog is
+also retained at the checksum-keyed backup path above. Identical files are reused.
+Destination-only files and older unreferenced audio remain. During repair,
+individual files may become readable before the whole job completes; an interrupted
+replacement may temporarily leave a mixed library. Stop external importers/writers,
+use a fresh preview to finish, and require the full live verification receipt.
+Without negotiated replacement, differing files/catalogs still block.
 
 Before the catalog commit, cancellation stops validation/install work and leaves
 verified installed files reusable. During catalog commit/live verification,
@@ -115,10 +126,13 @@ backend on both servers permits either to initiate an export. No reverse network
 connection is needed during a particular export.
 
 Protocol 1 is a one-way, whole-package repair/install, not a two-way merge.
-The receiver may have no catalog, or the exact same catalog bytes as the source.
-An existing catalog with a different checksum blocks apply, including differences
-only in whitespace, defaults, enablement or verification flags. A later protocol
-may define upgrades/merges. No conflict preference or force-overwrite exists in v1.
+Receivers advertise `replacement_policies: ["source"]` when durable replacement
+and publication are supported. Updated coordinators request `replacement_policy:
+"source"` when both services support publication; omission defaults to `preserve`.
+Unknown policy values are rejected. The selected source's entire catalog wins,
+including defaults, enablement and program assignments. Different catalogs and
+files block only when source replacement was not negotiated. Preview never writes
+live files; explicit apply authorizes the replacements reviewed in that plan.
 An identical catalog with missing indexes/audio is a supported repair target even
 if the receiver's public catalog endpoint currently fails to load.
 
@@ -249,9 +263,15 @@ and `error` (null or the error object below). Initiation returns the same shape.
 Transferred bytes count acknowledged verified payloads, not retransmitted traffic.
 The summary contains source/target catalog hashes (target may be null),
 `package_files`, `package_bytes`, `matching_files`, `missing_files`, `missing_bytes`,
-`conflict_files`, up to 100 conflict file IDs, `free_bytes`, `required_free_bytes`,
+`conflict_files`, up to 100 conflict file IDs, `replacement_bytes`,
+`replacement_files`, `free_bytes`, `required_free_bytes`,
 and `publication_state` (`unchanged`, `published`, `unknown`). Browser results
 contain no local filesystem paths, configuration secrets or raw exception messages.
+`replacement_bytes` counts source payload bytes needed for differing files;
+`missing_bytes` remains missing-only. `replacement_files` counts differing live
+files even when verified staged bytes already satisfy them. Job status includes
+`replacement_policy`; both transfer byte totals and the pending bitmap include
+missing plus differing files. Older summaries default replacement bytes to zero.
 
 State transitions:
 
@@ -278,7 +298,9 @@ its existing job; it never starts a second transfer. Cancel is idempotent.
 The source retains a manifest snapshot for the preview without locking stores for
 operator review. The receiver's inventory hashes actual file bytes; matching size
 alone does not count as present. Differing bytes at any required path, including
-corrupt audio, are conflicts and block v1. The UI must name this limitation.
+corrupt audio and support-document line endings, are replacement candidates when
+source replacement is negotiated; otherwise they block. Exact source hashes remain
+mandatory. No newline-equivalence exception or checksum bypass is used.
 The source must hash and validate every required dependency before preview can
 be ready; any missing/invalid source file produces `source_incomplete` and cannot
 be omitted from the package. No-op plans still require explicit apply and final
@@ -307,7 +329,7 @@ its hash/length must equal the manifest's sole catalog entry.
 | Peer method and suffix | Responsibility |
 | --- | --- |
 | `GET /capabilities` | Versions, supported formats, limits and receive readiness; no absolute paths |
-| `POST /sessions` | `{ protocol_version, manifest, catalog_text }`; start asynchronous receiver inventory/preview; return 202 with session ID |
+| `POST /sessions` | `{ protocol_version, manifest, catalog_text, replacement_policy? }`; optional policy is `source`, omission preserves legacy behavior; return 202 with session ID |
 | `GET /sessions/:id` | Inventory/apply progress, bounded summary, target snapshot digest and final receipt |
 | `POST /sessions/:id/prepare` | `{ protocol_version, manifest_sha256, target_snapshot_sha256, plan_sha256 }`; reserve/revalidate target; reject stale preview |
 | `PUT /sessions/:id/files/:file_id` | Raw `application/octet-stream`, exact declared Content-Length, no content encoding; expected bytes/hash come only from pinned manifest |
@@ -320,9 +342,9 @@ status contains `protocol_version`, `session_id`, `state`, `progress`, `summary`
 `target_snapshot_sha256` (null until ready), `receipt` (null until completed), and
 `error`. Step-3 status additionally contains `manifest_sha256` and `pending_bitmap`:
 canonical base64 of ceil(file-count / 8) bytes, bit (index & 7) in byte (index >> 3)
-set for each missing file at its canonical manifest index. Unused high bits must
+set for each pending missing or replacement file at its canonical manifest index. Unused high bits must
 be zero. This keeps the 10,000-file plan within the 64 KiB control-response limit.
-An unknown or matching file cannot be uploaded; retries of a planned missing file
+An unknown or matching file cannot be uploaded; retries of a planned pending file
 are allowed. Session states follow the job states above, substituting `scanning`
 for `previewing`, adding `preparing` and omitting `expired` until a ready session
 expires. Prepare returns that status initially in `preparing`; poll until
@@ -335,10 +357,12 @@ retrieval use their respective larger metadata bounds. Both admin hops stream fi
 bodies without JSON parsing and propagate disconnects/cancellation to local owners.
 
 `target_snapshot_sha256` hashes canonical `JSON.stringify` bytes of
-`{ catalog_sha256, files }`, where files are ASCII-path-sorted objects
+`{ catalog_sha256, files, live_files }`, where files are ASCII-path-sorted objects
 `{ file_id, state, sha256, bytes }`; state is `missing`, `matching` or `conflict`,
-and missing hashes/lengths are null. `plan_sha256` hashes canonical bytes of
-`{ protocol_version, peer, manifest_sha256, target_snapshot_sha256 }` in that order;
+and missing hashes/lengths are null. `live_files` records actual live
+`{ file_id, sha256, bytes }` independently of the reusable staged cache, so a cache
+hit cannot hide a live-file change after preview. `plan_sha256` hashes canonical bytes of
+`{ protocol_version, peer, manifest_sha256, target_snapshot_sha256, replacement_policy }` in that order;
 `peer` is the normalized selected public URL. The receiver checks manifest/target
 digests and binds the opaque plan digest to the session; the source coordinator
 derives and verifies the full plan. Space figures are advisory and excluded from
@@ -362,13 +386,14 @@ verified cache files and previous catalogs are retained.
 
 1. Receiver verifies persistent storage is configured, writable and usable by the
    running asset service. Container-local disposable storage reports not ready.
-   Require free bytes >= missing bytes + largest missing file + 1 GiB reserve;
+   Require free bytes >= missing bytes + replacement bytes + largest pending file + 1 GiB reserve;
    recalculate as files install. Validate staging and final paths on the same volume.
 2. Receive into a private `.instrument-transfer/` staging area under that root.
    Reject links/reparse points, nonregular files, traversal, absolute/drive/UNC
    paths and escaping ancestors on both read/write paths. Use exclusive staging
    creation and race-resistant publication; never overwrite an unexpected target.
-3. Verify exact length/hash before atomic no-clobber file installation. Metadata
+3. Verify exact length/hash before atomic installation. Replacements require the
+   approved previous bytes to remain unchanged and a durable backup. Metadata
    files also undergo existing format/index/source checks. Staged candidate checks
    read the union of existing matching and verified staged files. Never copy code,
    permissions, ownership or host-specific paths from the sender.
@@ -400,7 +425,7 @@ success from transferred byte counts. Retain terminal session receipts for 7 day
 ## Errors and implementation acceptance
 
 The Servers-page controls export from the current server to the selected trusted
-connection. They review preview counts and space, disable incompatible/conflicting
+connection. They review preview counts and space, disable incompatible/unnegotiated conflicting
 or expired plans, send the reviewed plan hash, and poll through publication and
 receipt verification. Job IDs are remembered per browser session and connection;
 returning to the page resumes status checks without restarting work. Lost write

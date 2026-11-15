@@ -544,7 +544,18 @@ test("full apply publishes a live instrument library and checks its durable comp
   await job.work;
   f.jobs.apply(job, job.plan_sha256);
   await job.work;
-  assert.equal(job.state, "completed", JSON.stringify(job.error));
+  assert.equal(
+    job.state,
+    "completed",
+    JSON.stringify({
+      job: job.error,
+      target: [...f.target.store.sessions.values()].map((e) => ({
+        state: e.state,
+        error: e.error,
+        phase: e.journal_phase,
+      })),
+    }),
+  );
   assert.equal(job.receipt.catalog_sha256, job.manifest.catalog_sha256);
   assert.equal(job.receipt.files_verified, job.manifest.files.length);
   assert.equal(job.summary.publication_state, "published");
@@ -560,6 +571,73 @@ test("full apply publishes a live instrument library and checks its durable comp
   assert.equal(
     transfer_hash(Buffer.from(await audio.arrayBuffer())),
     f.b.asset.sha256,
+  );
+});
+
+test("HTTP source-authoritative export repairs differing destination bytes and catalogs, then becomes a no-op", async (t) => {
+  const f = await topology(t, false, {
+    make_fixture: publication_fixture,
+    publication_enabled: true,
+  });
+  const previous = new Map();
+  f.b.catalog.library_version++;
+  f.b.save();
+  f.b.write(f.b.asset.path, Buffer.alloc(300, 7));
+  f.b.write(f.b.recording.path, "corrupted original");
+  for (const relative of ["catalog.json", f.b.asset.path, f.b.recording.path])
+    previous.set(relative, fs.readFileSync(path.join(f.b.root, relative)));
+  const job = f.jobs.start("http://receiver.example");
+  await job.work;
+  assert.equal(job.state, "ready", JSON.stringify(job.error));
+  assert.equal(f.jobs.status(job).replacement_policy, "source");
+  assert.equal(job.summary.conflict_files, 3);
+  assert.equal(job.summary.missing_files, 0);
+  assert.ok(job.progress.bytes_to_transfer > 0);
+  for (const [relative, bytes] of previous)
+    assert.deepEqual(fs.readFileSync(path.join(f.b.root, relative)), bytes);
+  f.jobs.apply(job, job.plan_sha256);
+  await job.work;
+  assert.equal(job.state, "completed", JSON.stringify(job.error));
+  for (const file of job.manifest.files)
+    assert.equal(
+      transfer_hash(fs.readFileSync(path.join(f.b.root, file.relative_path))),
+      file.sha256,
+    );
+  assert.equal(job.receipt.catalog_sha256, job.manifest.catalog_sha256);
+  const retry = f.jobs.start("http://receiver.example");
+  await retry.work;
+  assert.equal(retry.summary.missing_files + retry.summary.conflict_files, 0);
+  f.jobs.apply(retry, retry.plan_sha256);
+  await retry.work;
+  assert.equal(retry.state, "completed", JSON.stringify(retry.error));
+  assert.equal(retry.progress.bytes_transferred, 0);
+});
+
+test("an unnegotiated peer retains the legacy no-overwrite policy", async (t) => {
+  const f = await topology(t, false, {
+    make_fixture: publication_fixture,
+    publication_enabled: true,
+  });
+  f.b.catalog.library_version++;
+  f.b.save();
+  const previous = fs.readFileSync(path.join(f.b.root, "catalog.json"));
+  const remote = f.jobs.remote;
+  f.jobs.remote = async (...args) => {
+    const result = await remote(...args);
+    if (args[1] === "/capabilities") delete result.replacement_policies;
+    return result;
+  };
+  const job = f.jobs.start("http://receiver.example");
+  await job.work;
+  assert.equal(job.replacement_policy, "preserve");
+  assert.equal(job.state, "blocked");
+  assert.equal(job.error.code, "instrument_transfer_catalog_conflict");
+  assert.throws(() => f.jobs.apply(job, job.plan_sha256), {
+    code: "instrument_transfer_invalid_state",
+  });
+  assert.deepEqual(
+    fs.readFileSync(path.join(f.b.root, "catalog.json")),
+    previous,
   );
 });
 

@@ -39,6 +39,8 @@ export function apply_instrument_transfer(jobs, job, plan_sha256) {
   if (job.state === "expired" || jobs.now() >= job.deadline)
     throw transfer_error("expired", 410);
   if (job.state !== "ready") throw transfer_error("invalid_state");
+  if (job.replacement_policy !== "source" && job.summary?.conflict_files)
+    throw transfer_error("upgrade_required");
   if (!job.staging_supported) throw transfer_error("upgrade_required");
   if (
     [...jobs.jobs.values()].some(
@@ -112,8 +114,13 @@ async function send(jobs, job) {
     throw status_error(destination);
   const files = pending_files(job.manifest, destination.pending_bitmap);
   if (
-    files.length !== job.summary.missing_files ||
-    files.reduce((n, f) => n + f.bytes, 0) !== job.summary.missing_bytes
+    files.length !==
+      job.summary.missing_files +
+        (job.replacement_policy === "source"
+          ? job.summary.conflict_files
+          : 0) ||
+    files.reduce((n, f) => n + f.bytes, 0) !==
+      job.summary.missing_bytes + (job.summary.replacement_bytes ?? 0)
   )
     throw transfer_error("snapshot_changed");
   let next = 0;

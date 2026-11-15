@@ -28,6 +28,10 @@ Route implementations mounted by the Admin service's root `index.js`.
   publication when both backends support it; staging-only older peers retain their
   explicit staged result. See `../INSTRUMENT_TRANSFER.md`.
 
+Instrument jobs negotiate source-authoritative replacement with the receiver,
+bind that policy into the preview plan, and include differing files in transfer
+totals. Older/unnegotiated peers retain the preserve/block behavior.
+
 Shared repository paths are owned by `../repositories.js`. Keep request and
 response validation within each handler and follow the root personal-information
 policy for every API, including errors and logs.

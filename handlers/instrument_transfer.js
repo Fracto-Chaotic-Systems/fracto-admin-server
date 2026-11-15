@@ -110,7 +110,19 @@ export function create_instrument_peer_router({
       inflate: false,
     }),
     safe(async (req, res) => {
-      exact_fields(req.body, ["protocol_version", "manifest", "catalog_text"]);
+      exact_fields(req.body, [
+        "protocol_version",
+        "manifest",
+        "catalog_text",
+        ...(Object.hasOwn(req.body ?? {}, "replacement_policy")
+          ? ["replacement_policy"]
+          : []),
+      ]);
+      if (
+        req.body.replacement_policy !== undefined &&
+        req.body.replacement_policy !== "source"
+      )
+        throw transfer_error("invalid_request", 400);
       res
         .status(202)
         .json(
