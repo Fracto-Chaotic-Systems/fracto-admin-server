@@ -134,6 +134,12 @@ test(
         );
         await admin.query("INSERT INTO tiles VALUES (1,?)", [name]);
         await admin.query("INSERT INTO automation VALUES (1,?)", [name]);
+        for (const table of ["tiles_seed", "fracto_tile_seed_checkpoints"]) {
+          await admin.query(
+            `CREATE TABLE ${table} (id INT PRIMARY KEY,value TEXT) ENGINE=InnoDB`,
+          );
+          await admin.query(`INSERT INTO ${table} VALUES (1,?)`, [name]);
+        }
       }
       await admin.query(
         "UPDATE parents SET label='remote-conflict' WHERE id=2",
@@ -167,6 +173,10 @@ test(
       );
       assert_compatible(a.manifest, b.manifest);
       assert.ok(!a.snapshot.tables.tiles && !a.snapshot.tables.automation);
+      assert.ok(
+        !a.snapshot.tables.tiles_seed &&
+          !a.snapshot.tables.fracto_tile_seed_checkpoints,
+      );
       const merged = await a.merge(b.snapshot, "remote");
       assert.ok(
         merged.conflicts.some(

@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import { canonical_migration_history } from "../../../utils/migration_checksums.js";
 import { json_insert_value } from "./database_sync_values.js";
 
-export const EXCLUDED_TABLES = ["tiles", "automation"];
+export const EXCLUDED_TABLES = [
+  "tiles",
+  "tiles_seed",
+  "fracto_tile_seed_checkpoints",
+  "automation",
+];
 export const MAX_BYTES = 512 * 1024 * 1024;
 export const MAX_SNAPSHOT_BYTES = 480 * 1024 * 1024;
 export const sync_error = (code, status = 409) =>

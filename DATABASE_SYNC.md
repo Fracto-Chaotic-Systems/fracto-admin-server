@@ -7,8 +7,11 @@ performs a two-way union. If conflicts exist, choose which server supplies all
 conflicting rows. Nonconflicting rows from both sides remain. No tables are
 installed, migrated, or backfilled by this feature.
 
-`tiles` and `automation` are excluded from metadata comparison, row reads and
-writes. All other installed tables, including authentication and orbital tables,
+`tiles`, `tiles_seed`, `fracto_tile_seed_checkpoints`, and `automation` are excluded from metadata comparison, row reads and
+writes. Seed checkpoints refer to installation-local CSV files and must never be
+merged between peers. Custom-named seed tables are ordinary installed tables;
+avoid peer synchronization while maintaining those staging tables.
+All other installed tables, including authentication and orbital tables,
 participate. Actual column, index and foreign-key definitions must also match.
 Auto-increment counters are omitted from schema comparison. Migration timestamps
 are ordinary data; checksum/version records must match before synchronization.

@@ -13,7 +13,8 @@ Route implementations mounted by the Admin service's root `index.js`.
 - `users.js`: administrative account operations.
 - `versions.js`: legacy repository version/status reporting.
 - `database_sync.js` and `database_sync_store.js`: trusted peer sessions, merge
-  planning, transactional preparation, and exact equality verification.
+  planning, transactional preparation, and exact equality verification. Tile
+  data, the default seed table, and local tile-seeding checkpoints are excluded.
 - `database_sync_values.js`: lossless JSON numeric-path scanning and checked
   binary-double/decimal expressions for JSON numbers that MySQL rounds on parse.
 - `mesh_sync_session.js`: asynchronous inventory acquisition and progress polling,
